@@ -1,0 +1,3 @@
+﻿id,partner_id,related_partner_id,related_partner_name,relationship_type,source_type,verification_status,notes,visibility
+REL_001,P_COMPANY_035,P001,昆图斯,签约创作者,用户确认;公开资料,部分核验,用户补充确认：昆图斯是上海的个人创作者，并签约果核宇宙；关系用于展示 MCN/创作者关联，不得合并两者主体。,public
+REL_002,P001,P_COMPANY_035,果核宇宙,签约MCN机构,用户确认;公开资料,部分核验,昆图斯个人档案与果核宇宙公司档案建立双向关联；当前合作报价、商务授权和履约反馈仍需单独核验。,public
