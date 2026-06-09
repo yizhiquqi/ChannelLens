@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { AlertCircle, CheckCircle, ChevronLeft, Download, FileText, Link2, ShieldCheck, Upload, Users } from 'lucide-react';
 import { insertCreatorProfile } from '../lib/database';
@@ -201,8 +201,23 @@ function SelectInput({
 
 export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
   const [form, setForm] = useState<OnboardingForm>(initialForm);
+  const [editingProfileId, setEditingProfileId] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem('channellens_edit_profile');
+    if (!raw) return;
+
+    try {
+      const profile = JSON.parse(raw) as Partial<OnboardingForm> & { id?: string };
+      setForm({ ...initialForm, ...profile });
+      setEditingProfileId(profile.id || '');
+      window.sessionStorage.removeItem('channellens_edit_profile');
+    } catch {
+      window.sessionStorage.removeItem('channellens_edit_profile');
+    }
+  }, []);
 
   const activeRequired = form.partnerRole ? requiredByRole[form.partnerRole] : (['partnerRole'] as FieldKey[]);
   const completion = useMemo(() => {
@@ -236,6 +251,7 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
   function payload() {
     return {
       ...form,
+      id: editingProfileId || undefined,
       contractEntity: form.contractEntity || form.mcnCompanyName || form.companyName,
       subjectChain: subjectChain(),
       completion,
@@ -243,6 +259,7 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
       userId: user?.id,
       userEmail: user?.email,
       submittedAt: new Date().toISOString(),
+      reviewReason: editingProfileId ? '用户已补充资料，待平台重新审核。' : undefined,
       status: 'pending',
     };
   }
@@ -257,8 +274,10 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
     try {
       const saved = await insertCreatorProfile(payload());
       const existing = JSON.parse(localStorage.getItem('channellens_creator_profiles') ?? '[]');
-      existing.push(saved);
-      localStorage.setItem('channellens_creator_profiles', JSON.stringify(existing));
+      const next = editingProfileId
+        ? existing.map((item: { id?: string }) => (item.id === editingProfileId ? saved : item))
+        : [...existing, saved];
+      localStorage.setItem('channellens_creator_profiles', JSON.stringify(next));
       setSubmitted(true);
     } catch {
       setMessage('提交到云端数据库失败，请稍后重试，或联系平台管理员。');

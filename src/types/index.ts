@@ -56,6 +56,7 @@ export interface Partner {
   followerCount?: string;
   engagementRate?: string;
   updatedAt: string;
+  adminVisibility?: 'public' | 'internal';
 }
 
 export interface CooperationCase {

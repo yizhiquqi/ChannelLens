@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { loadPartners, loadReviews, loadRelationships } from '../lib/csvLoader';
+import { fetchPartnerVisibilityOverrides, fetchPublicAdminPartners, isSupabaseConfigured } from '../lib/database';
 import type { Partner, CooperationReview, PartnerRelationship } from '../types';
 
 interface CSVDataState {
@@ -30,7 +31,27 @@ export function CSVDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     Promise.all([loadPartners(), loadReviews(), loadRelationships()])
       .then(([partners, reviews, relationships]) => {
-        setState({ partners, reviews, relationships, loading: false, error: null });
+        if (!isSupabaseConfigured) {
+          setState({ partners, reviews, relationships, loading: false, error: null });
+          return;
+        }
+
+        Promise.all([fetchPublicAdminPartners<Partner>(), fetchPartnerVisibilityOverrides()])
+          .then(([adminPartners, visibilityOverrides]) => {
+            const visibilityMap = new Map(visibilityOverrides.map((item) => [item.id, item.visibility]));
+            const publicAdminPartners = adminPartners.filter((partner) => partner.adminVisibility === 'public');
+            const visibleCsvPartners = partners.filter((partner) => visibilityMap.get(partner.id) !== 'internal');
+            const seen = new Set<string>();
+            const mergedPartners = [...publicAdminPartners, ...visibleCsvPartners].filter((partner) => {
+              if (seen.has(partner.id)) return false;
+              seen.add(partner.id);
+              return true;
+            });
+            setState({ partners: mergedPartners, reviews, relationships, loading: false, error: null });
+          })
+          .catch(() => {
+            setState({ partners, reviews, relationships, loading: false, error: null });
+          });
       })
       .catch(() => {
         setState({

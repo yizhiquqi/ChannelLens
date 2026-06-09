@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BarChart3, LockKeyhole, ShieldCheck } from 'lucide-react';
-import { isSupabaseConfigured, supabase } from '../lib/database';
+import { fetchIsAdmin, isSupabaseConfigured, supabase } from '../lib/database';
 
 interface Props {
   onAuthenticated: () => void;
@@ -8,9 +8,10 @@ interface Props {
 }
 
 const ADMIN_SESSION_KEY = 'channellens_admin_session';
+const ADMIN_SESSION_VALUE = 'admin-v2';
 
 export function hasAdminSession() {
-  return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === 'ok';
+  return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === ADMIN_SESSION_VALUE;
 }
 
 export function clearAdminSession() {
@@ -38,7 +39,16 @@ export default function AdminLoginPage({ onAuthenticated, onNavigate }: Props) {
         return;
       }
 
-      window.sessionStorage.setItem(ADMIN_SESSION_KEY, 'ok');
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
+      const isAdmin = user ? await fetchIsAdmin(user.id, user.email) : false;
+      if (!isAdmin) {
+        await supabase.auth.signOut();
+        setError('这个账号不是管理员账号，无法进入后台。');
+        return;
+      }
+
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, ADMIN_SESSION_VALUE);
       onAuthenticated();
       return;
     }
@@ -53,7 +63,7 @@ export default function AdminLoginPage({ onAuthenticated, onNavigate }: Props) {
       return;
     }
 
-    window.sessionStorage.setItem(ADMIN_SESSION_KEY, 'ok');
+    window.sessionStorage.setItem(ADMIN_SESSION_KEY, ADMIN_SESSION_VALUE);
     onAuthenticated();
   }
 

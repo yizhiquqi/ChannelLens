@@ -69,7 +69,13 @@ export default function App() {
         {page === 'home' && <HomePage onNavigate={handleNavigate} />}
         {page === 'list' && <ChannelListPage onNavigate={handleNavigate} />}
         {page === 'detail' && <ChannelDetailPage channelId={detailId} onNavigate={handleNavigate} />}
-        {page === 'submit' && <SubmitReviewPage onNavigate={handleNavigate} />}
+        {page === 'submit' && (
+          isSupabaseConfigured && !session ? (
+            <LoginPage onNavigate={handleNavigate} onLoggedIn={() => handleNavigate('submit')} redirectLabel="登录后提交合作反馈" />
+          ) : (
+            <SubmitReviewPage onNavigate={handleNavigate} user={session?.user} />
+          )
+        )}
         {page === 'due-diligence' && <DueDiligenceRequestPage onNavigate={handleNavigate} />}
         {page === 'admin' && (
           adminAuthed ? (

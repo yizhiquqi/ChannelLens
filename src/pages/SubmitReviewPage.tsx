@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { ChevronLeft, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
-import { insertCooperationReview } from '../lib/database';
+import { insertCooperationReview, uploadEvidenceFiles, type EvidenceUpload } from '../lib/database';
 
 interface Props {
   onNavigate: (page: string) => void;
+  user?: User;
 }
 
 const PLATFORMS = ['抖音', '小红书', '视频号', '淘宝直播', '微信私域', '快手', '其他'];
@@ -53,6 +55,7 @@ const initialForm = {
   reviewText: '',
   evidenceStatus: 'pending_review',
   evidenceFiles: [] as string[],
+  evidenceFileMeta: [] as EvidenceUpload[],
   evidenceNote: '',
   visibilityPreference: 'public',
 };
@@ -80,11 +83,13 @@ function ScoreSelector({ label, value, onChange }: { label: string; value: numbe
   );
 }
 
-export default function SubmitReviewPage({ onNavigate }: Props) {
+export default function SubmitReviewPage({ onNavigate, user }: Props) {
   const { partners } = useCSVData();
   const [form, setForm] = useState<FormData>(initialForm);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   function f(patch: Partial<FormData>) {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -132,20 +137,27 @@ export default function SubmitReviewPage({ onNavigate }: Props) {
       setMessage('请先补齐品牌角色、合作方和合作反馈总结。');
       return;
     }
-    if (form.evidenceFiles.length === 0) {
+    if (selectedFiles.length === 0 && form.evidenceFiles.length === 0) {
       setMessage('请至少上传一项证据材料，例如合同、转账记录、对账单或聊天截图。');
       return;
     }
-    const payload = {
-      ...form,
-      id: `REVIEW_${Date.now()}`,
-      evidenceStatus: 'pending_review',
-      reviewStatus: 'pending',
-      submittedAt: new Date().toISOString(),
-      status: 'pending',
-    };
 
     try {
+      setSubmitting(true);
+      const uploadedFiles = selectedFiles.length > 0 ? await uploadEvidenceFiles(selectedFiles, user?.id) : form.evidenceFileMeta;
+      const payload = {
+        ...form,
+        id: `REVIEW_${Date.now()}`,
+        evidenceFiles: uploadedFiles.map((file) => file.name),
+        evidenceFilePaths: uploadedFiles.map((file) => file.path),
+        evidenceFileMeta: uploadedFiles,
+        userId: user?.id,
+        userEmail: user?.email,
+        evidenceStatus: 'pending_review',
+        reviewStatus: 'pending',
+        submittedAt: new Date().toISOString(),
+        status: 'pending',
+      };
       const saved = await insertCooperationReview(payload);
       const existing = JSON.parse(localStorage.getItem('channellens_reviews') ?? '[]');
       existing.push(saved);
@@ -153,6 +165,8 @@ export default function SubmitReviewPage({ onNavigate }: Props) {
       setSubmitted(true);
     } catch {
       setMessage('提交到云端数据库失败，请稍后重试，或联系平台管理员。');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -451,12 +465,16 @@ export default function SubmitReviewPage({ onNavigate }: Props) {
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">上传证据材料 <span className="text-red-400">*</span></label>
                   <label className="flex flex-col items-center justify-center gap-2 border border-dashed border-blue-200 bg-blue-50 rounded-xl px-4 py-6 cursor-pointer hover:bg-blue-100 transition-colors">
                     <span className="text-sm font-semibold text-blue-700">上传合同、转账记录、对账单或聊天截图</span>
-                    <span className="text-xs text-blue-500">当前原型会记录文件名；正式上线后会上传到后台存储。</span>
+                    <span className="text-xs text-blue-500">文件会上传到平台证据存储，后台审核后决定是否采信。</span>
                     <input
                       type="file"
                       className="hidden"
                       multiple
-                      onChange={(e) => f({ evidenceFiles: Array.from(e.target.files ?? []).map((file) => file.name) })}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        setSelectedFiles(files);
+                        f({ evidenceFiles: files.map((file) => file.name) });
+                      }}
                     />
                   </label>
                   {form.evidenceFiles.length > 0 && (
@@ -495,8 +513,8 @@ export default function SubmitReviewPage({ onNavigate }: Props) {
                   <p className="text-xs text-red-600">{message}</p>
                 </div>
               )}
-              <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors text-sm">
-                提交合作反馈
+              <button type="submit" disabled={submitting} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-colors text-sm">
+                {submitting ? '正在上传并提交...' : '提交合作反馈'}
               </button>
             </div>
           </form>

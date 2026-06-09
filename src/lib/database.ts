@@ -10,6 +10,14 @@ export const supabase = isSupabaseConfigured
   : null;
 
 type JsonRecord = Record<string, unknown>;
+type DataObject = object;
+
+export type EvidenceUpload = {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+};
 
 function withId(payload: JsonRecord, prefix: string) {
   const existingId = typeof payload.id === 'string' ? payload.id : '';
@@ -32,9 +40,9 @@ export async function insertCreatorProfile(payload: JsonRecord) {
     payload: nextPayload,
   };
 
-  const { error } = await supabase.from('partner_profiles').insert(row);
+  const { error } = await supabase.from('partner_profiles').upsert(row);
   if (error && String(error.message).includes('user_id')) {
-    const { error: fallbackError } = await supabase.from('partner_profiles').insert({
+    const { error: fallbackError } = await supabase.from('partner_profiles').upsert({
       id,
       status: String(nextPayload.status ?? 'pending'),
       payload: nextPayload,
@@ -106,12 +114,12 @@ export async function upsertCreatorProfiles(profiles: JsonRecord[]) {
   if (error) throw error;
 }
 
-export async function fetchAdminPartners<T extends JsonRecord>() {
+export async function fetchAdminPartners<T extends DataObject>() {
   if (!supabase) return [] as T[];
 
   const { data, error } = await supabase
     .from('admin_partners')
-    .select('id,payload,created_at,updated_at')
+    .select('id,visibility,payload,created_at,updated_at')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -119,15 +127,47 @@ export async function fetchAdminPartners<T extends JsonRecord>() {
   return (data ?? []).map((row) => ({
     ...(row.payload as T),
     id: row.id,
+    adminVisibility: row.visibility ?? (row.payload as JsonRecord).adminVisibility ?? 'internal',
   })) as T[];
+}
+
+export async function fetchPublicAdminPartners<T extends DataObject>() {
+  if (!supabase) return [] as T[];
+
+  const { data, error } = await supabase
+    .from('admin_partners')
+    .select('id,visibility,payload,created_at,updated_at')
+    .eq('visibility', 'public')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    ...(row.payload as T),
+    id: row.id,
+    adminVisibility: 'public',
+  })) as T[];
+}
+
+export async function fetchPartnerVisibilityOverrides() {
+  if (!supabase) return [] as Array<{ id: string; visibility: string }>;
+
+  const { data, error } = await supabase
+    .from('partner_visibility')
+    .select('id,visibility');
+
+  if (error) return [];
+  return (data ?? []) as Array<{ id: string; visibility: string }>;
 }
 
 export async function upsertAdminPartners(partners: JsonRecord[]) {
   if (!supabase) return;
   const rows = partners.map((partner) => {
     const id = withId(partner, 'PARTNER');
+    const visibility = String(partner.adminVisibility ?? 'internal');
     return {
       id,
+      visibility,
       payload: { ...partner, id },
       updated_at: new Date().toISOString(),
     };
@@ -135,6 +175,37 @@ export async function upsertAdminPartners(partners: JsonRecord[]) {
 
   const { error } = await supabase.from('admin_partners').upsert(rows);
   if (error) throw error;
+
+  const visibilityRows = rows.map((partner) => ({
+    id: partner.id,
+    visibility: partner.visibility,
+    updated_at: new Date().toISOString(),
+  }));
+  const { error: visibilityError } = await supabase.from('partner_visibility').upsert(visibilityRows);
+  if (visibilityError) throw visibilityError;
+}
+
+export async function uploadEvidenceFiles(files: File[], ownerId?: string) {
+  if (!supabase) {
+    return files.map((file) => ({ name: file.name, path: file.name, size: file.size, type: file.type }));
+  }
+
+  const folder = ownerId || 'anonymous';
+  const uploaded: EvidenceUpload[] = [];
+
+  for (const file of files) {
+    const safeName = file.name.replace(/[^\w.\-\u4e00-\u9fa5]/g, '_');
+    const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
+    const { error } = await supabase.storage.from('evidence-files').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+    if (error) throw error;
+    uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+  }
+
+  return uploaded;
 }
 
 export async function insertCooperationReview(payload: JsonRecord) {
@@ -190,4 +261,41 @@ export async function upsertCooperationReviews(reviews: JsonRecord[]) {
 
   const { error } = await supabase.from('cooperation_feedback').upsert(rows);
   if (error) throw error;
+}
+
+export async function fetchUserProfile<T extends JsonRecord>(userId: string) {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as T | null;
+}
+
+export async function upsertUserProfile(profile: JsonRecord) {
+  if (!supabase) return;
+
+  const { error } = await supabase.from('user_profiles').upsert({
+    ...profile,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) throw error;
+}
+
+export async function fetchIsAdmin(userId: string, email?: string) {
+  if (!supabase) return false;
+
+  const { data, error } = await supabase
+    .from('admin_users')
+    .select('id')
+    .or(`user_id.eq.${userId},email.eq.${email ?? ''}`)
+    .maybeSingle();
+
+  if (error) return false;
+  return Boolean(data);
 }
