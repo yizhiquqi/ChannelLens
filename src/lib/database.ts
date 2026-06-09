@@ -40,7 +40,11 @@ export async function insertCreatorProfile(payload: JsonRecord) {
     payload: nextPayload,
   };
 
-  const { error } = await supabase.from('partner_profiles').upsert(row);
+  const query = typeof payload.id === 'string' && payload.id
+    ? supabase.from('partner_profiles').upsert(row)
+    : supabase.from('partner_profiles').insert(row);
+
+  const { error } = await query;
   if (error && String(error.message).includes('user_id')) {
     const { error: fallbackError } = await supabase.from('partner_profiles').upsert({
       id,

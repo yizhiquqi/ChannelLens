@@ -123,7 +123,27 @@ const inputClass = 'w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm
 
 function isFilled(value: OnboardingForm[FieldKey]) {
   if (typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.length > 0;
   return String(value).trim().length > 0;
+}
+
+function submitErrorMessage(error: unknown) {
+  const detail = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '');
+  if (detail.includes('row-level security')) {
+    return '提交权限校验失败，请退出后重新登录，再提交入驻资料。';
+  }
+  if (detail.includes('evidence-files') || detail.includes('storage')) {
+    return '文件上传或读取权限失败，请确认已登录后重新上传材料。';
+  }
+  if (detail.includes('user_id')) {
+    return '账号身份写入失败，请刷新页面重新登录后再提交。';
+  }
+
+  return detail ? `提交到云端数据库失败：${detail}` : '提交到云端数据库失败，请稍后重试，或联系平台管理员。';
 }
 
 function FieldLabel({ children, required = false }: { children: React.ReactNode; required?: boolean }) {
@@ -314,8 +334,8 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
         : [...existing, saved];
       localStorage.setItem('channellens_creator_profiles', JSON.stringify(next));
       setSubmitted(true);
-    } catch {
-      setMessage('提交到云端数据库失败，请稍后重试，或联系平台管理员。');
+    } catch (error) {
+      setMessage(submitErrorMessage(error));
     }
   }
 
