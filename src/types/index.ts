@@ -101,6 +101,7 @@ export interface CooperationReview {
   riskFeedback: string;
   evidenceStatus: EvidenceStatus;
   reviewStatus: ReviewStatus;
+  reviewVisibility?: 'public' | 'internal';
   createdAt: string;
 }
 

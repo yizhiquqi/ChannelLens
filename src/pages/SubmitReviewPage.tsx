@@ -155,6 +155,7 @@ export default function SubmitReviewPage({ onNavigate, user }: Props) {
         userEmail: user?.email,
         evidenceStatus: 'pending_review',
         reviewStatus: 'pending',
+        reviewVisibility: 'internal',
         submittedAt: new Date().toISOString(),
         status: 'pending',
       };

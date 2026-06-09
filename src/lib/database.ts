@@ -254,6 +254,7 @@ export async function fetchPublicCooperationReviews<T extends DataObject>() {
     .select('id,review_status,evidence_status,payload,created_at,updated_at')
     .eq('review_status', 'verified')
     .eq('evidence_status', 'verified')
+    .eq('payload->>reviewVisibility', 'public')
     .order('created_at', { ascending: false });
 
   if (error) return [] as T[];

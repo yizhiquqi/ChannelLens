@@ -267,7 +267,7 @@ function parseRelationships(value: string, partnerId: string): Partner['adminRel
         relatedPartnerName: name || 'Unnamed relation',
         relationshipType: type || 'Related party',
         sourceType: source || 'Admin edit',
-        verificationStatus: status || '???',
+        verificationStatus: status || '未核验',
         notes,
       };
     })
@@ -544,6 +544,7 @@ export default function AdminPage() {
       ...currentReview,
       evidenceStatus,
       reviewStatus,
+      reviewVisibility: currentReview.reviewVisibility ?? 'internal',
       evidenceReviewNote: note,
       evidenceReviewedAt: reviewedAt,
     };
@@ -557,11 +558,24 @@ export default function AdminPage() {
                 ...review,
                 evidenceStatus,
                 reviewStatus,
+                reviewVisibility: review.reviewVisibility ?? 'internal',
                 evidenceReviewNote: note,
                 evidenceReviewedAt: reviewedAt,
               }
             : review
         )
+      )
+    );
+  }
+
+  function setReviewVisibility(reviewId: string, reviewVisibility: Visibility) {
+    const currentReview = allReviews.find((review) => review.id === reviewId);
+    if (!currentReview) return;
+
+    saveLocalReviews(
+      mergeById(
+        [{ ...currentReview, reviewVisibility }],
+        localReviews.map((review) => (review.id === reviewId ? { ...review, reviewVisibility } : review))
       )
     );
   }
@@ -1004,6 +1018,7 @@ export default function AdminPage() {
                 const reviewStatus = String(review.reviewStatus ?? 'pending');
                 const statusMeta = statusLabels[reviewStatus] ?? statusLabels.pending;
                 const evidenceStatus = String(review.evidenceStatus ?? 'pending_review');
+                const reviewVisibility = String(review.reviewVisibility ?? 'internal') as Visibility;
                 const evidenceLabel =
                   evidenceStatus === 'verified'
                     ? '证据已验证'
@@ -1025,6 +1040,11 @@ export default function AdminPage() {
                           evidenceStatus === 'needs_info' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                           'bg-amber-50 text-amber-700 border-amber-100'
                         }`}>{evidenceLabel}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded border ${
+                          reviewVisibility === 'public' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-gray-50 text-gray-500 border-gray-100'
+                        }`}>
+                          {reviewVisibility === 'public' ? '公开' : '内部'}
+                        </span>
                         {reviewStatus === 'verified' ? <CheckCircle size={13} className="text-emerald-500" /> : <Clock size={13} className="text-amber-500" />}
                       </div>
                       <span className="text-xs text-gray-400 shrink-0 ml-4">{review.cooperationDate || review.createdAt || review.submittedAt}</span>
@@ -1059,6 +1079,16 @@ export default function AdminPage() {
                     </div>
                     {(
                       <div className="flex flex-wrap gap-1.5 mt-3">
+                        <button
+                          onClick={() => setReviewVisibility(review.id, reviewVisibility === 'public' ? 'internal' : 'public')}
+                          className={`text-xs border px-2.5 py-1.5 rounded-lg ${
+                            reviewVisibility === 'public'
+                              ? 'bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100'
+                              : 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100'
+                          }`}
+                        >
+                          {reviewVisibility === 'public' ? '设为内部' : '设为公开'}
+                        </button>
                         <button
                           onClick={() => setReviewEvidenceStatus(review.id, 'verified', 'verified', '证据材料已核验，合作反馈通过审核。')}
                           className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1.5 rounded-lg hover:bg-emerald-100"
@@ -1146,6 +1176,34 @@ export default function AdminPage() {
                   })
                 }
               />
+              <div className="rounded-xl border border-gray-100 bg-white p-4 space-y-4">
+                <div>
+                  <div className="text-xs font-bold text-gray-900">E. Cooperation fit index</div>
+                  <div className="text-xs text-gray-400 mt-1">Edit overall and detailed score dimensions shown in section E.</div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {([
+                    ['authenticity', '信息真实性'],
+                    ['fulfillment', '履约稳定性'],
+                    ['categoryFit', '类目匹配度'],
+                    ['conversionFeedback', '转化反馈'],
+                    ['dataCompleteness', '数据完整度'],
+                    ['riskControl', '风险控制'],
+                  ] as Array<[keyof Partner['scores'], string]>).map(([key, label]) => (
+                    <TextInput
+                      key={key}
+                      label={label}
+                      value={String(editingPartner.scores?.[key] ?? '')}
+                      onChange={(value) =>
+                        setEditingPartner({
+                          ...editingPartner,
+                          scores: { ...editingPartner.scores, [key]: Number(value) || 0 },
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
               <TextArea
                 label="风险标签"
                 value={editingPartner.riskTags.join('，')}

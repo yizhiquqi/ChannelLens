@@ -394,32 +394,46 @@ function PublicCasesModule({ partner }: { partner: Partner }) {
 
 // ─── Module D: Relationships ─────────────────────────────────────────────────
 function RelationshipsModule({ relationships }: { relationships: PartnerRelationship[] }) {
+  const visibleRelationships = relationships.filter((rel) => {
+    const name = rel.relatedPartnerName.trim();
+    const isPlaceholderAdminRelation =
+      name.length <= 1 &&
+      rel.relationshipType === 'Related party' &&
+      rel.sourceType === 'Admin edit';
+
+    return !isPlaceholderAdminRelation;
+  });
+
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-6">
       <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-4 flex items-center gap-2">
         <GitFork size={14} />D. 公司 / 达人 / 团队关系
       </h2>
-      {relationships.length === 0 ? (
+      {visibleRelationships.length === 0 ? (
         <p className="text-sm text-gray-400">
           暂无公开关联关系，后续将补充 MCN、达人、团队和商务归属信息。
         </p>
       ) : (
         <div className="space-y-3">
-          {relationships.map((rel) => (
-            <div key={rel.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-semibold text-gray-800 text-sm">{rel.relatedPartnerName}</span>
-                <Tag className={VERIFICATION_STYLES[rel.verificationStatus] ?? VERIFICATION_STYLES['未核验']}>
-                  {rel.verificationStatus}
-                </Tag>
+          {visibleRelationships.map((rel) => {
+            const verificationStatus = rel.verificationStatus === '???' ? '未核验' : rel.verificationStatus;
+
+            return (
+              <div key={rel.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-gray-800 text-sm">{rel.relatedPartnerName}</span>
+                  <Tag className={VERIFICATION_STYLES[verificationStatus] ?? VERIFICATION_STYLES['未核验']}>
+                    {verificationStatus}
+                  </Tag>
+                </div>
+                <div className="flex gap-3 text-xs text-gray-500">
+                  <span>关系类型：{rel.relationshipType}</span>
+                  <span>来源：{rel.sourceType}</span>
+                </div>
+                {rel.notes && <p className="text-xs text-gray-500 mt-1">{rel.notes}</p>}
               </div>
-              <div className="flex gap-3 text-xs text-gray-500">
-                <span>关系类型：{rel.relationshipType}</span>
-                <span>来源：{rel.sourceType}</span>
-              </div>
-              {rel.notes && <p className="text-xs text-gray-500 mt-1">{rel.notes}</p>}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -591,7 +605,7 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
   }
 
   const verifiedReviews = reviews.filter(
-    (r) => r.partnerId === channelId && r.reviewStatus === 'verified'
+    (r) => r.partnerId === channelId && r.reviewStatus === 'verified' && r.evidenceStatus === 'verified' && r.reviewVisibility === 'public'
   );
   const partnerRelationships = partner.adminRelationships?.length
     ? partner.adminRelationships

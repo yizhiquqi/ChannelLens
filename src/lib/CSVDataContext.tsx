@@ -48,7 +48,7 @@ export function CSVDataProvider({ children }: { children: ReactNode }) {
               return true;
             });
             const reviewSeen = new Set<string>();
-            const mergedReviews = [...publicReviews, ...reviews].filter((review) => {
+            const mergedReviews = publicReviews.filter((review) => {
               if (reviewSeen.has(review.id)) return false;
               reviewSeen.add(review.id);
               return true;
