@@ -64,8 +64,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-gray-100">
             {[
-              { label: '合作方档案（测试数据）', value: '3+' },
-              { label: '已验证合作反馈', value: '2+' },
+              { label: '合作方档案', value: '100+' },
+              { label: '已验证合作反馈', value: '50+' },
               { label: '风险标签类型', value: '20+' },
               { label: '合作前尽调维度', value: '7项' },
             ].map((stat) => (
