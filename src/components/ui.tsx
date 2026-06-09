@@ -28,8 +28,8 @@ export function Nav({ currentPage, onNavigate, userEmail, onSignOut }: NavProps)
               <BarChart3 className="w-4.5 h-4.5 text-white" size={18} />
             </div>
             <div className="flex flex-col leading-tight">
-              <span className="font-bold text-gray-900 text-[15px] tracking-tight">渠鉴</span>
-              <span className="text-[10px] text-gray-400 tracking-widest font-medium -mt-0.5">ChannelLens</span>
+              <span className="font-bold text-gray-900 text-[15px] tracking-tight">渠评</span>
+              <span className="text-[10px] text-gray-400 tracking-widest font-medium -mt-0.5">Quping</span>
             </div>
           </button>
 

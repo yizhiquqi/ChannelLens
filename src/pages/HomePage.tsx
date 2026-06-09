@@ -184,7 +184,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <div>
               <p className="text-sm font-semibold text-gray-800 mb-1">关于平台数据说明</p>
               <p className="text-xs text-gray-500 leading-relaxed">
-                渠鉴 ChannelLens 当前为 MVP 测试版。所有公开资料均标注数据来源与核验状态，公开案例不等同于平台已验证合作评价。
+                渠评 Quping 当前为 MVP 测试版。所有公开资料均标注数据来源与核验状态，公开案例不等同于平台已验证合作评价。
                 仅 review_status = verified 的合作反馈计入公开评分。未经核验的信息以"待核验"标注。
                 平台不承担因信息不完整或未及时更新导致的合作决策风险。
               </p>
@@ -228,9 +228,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
               <BarChart3 size={15} className="text-white" />
             </div>
-            <span className="text-white font-bold">渠鉴 ChannelLens</span>
+            <span className="text-white font-bold">渠评 Quping</span>
           </div>
-          <p className="text-slate-600 text-xs">© 2026 ChannelLens · 电商品牌合作方信用查询与尽调平台 · MVP 测试版</p>
+          <p className="text-slate-600 text-xs">© 2026 Quping · 电商品牌合作方信用查询与尽调平台 · MVP 测试版</p>
           <div className="flex items-center justify-center gap-1.5 mt-2">
             <Clock size={11} className="text-slate-600" />
             <span className="text-slate-600 text-xs">数据持续更新中</span>

@@ -351,7 +351,7 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
                 <Users size={20} className="text-white" />
               </div>
               <div>
-                <p className="text-xs text-gray-400 font-medium">ChannelLens</p>
+                <p className="text-xs text-gray-400 font-medium">Quping</p>
                 <h1 className="text-lg font-bold text-gray-900">合作商入驻</h1>
               </div>
             </div>

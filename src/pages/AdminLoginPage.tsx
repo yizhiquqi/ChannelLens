@@ -75,8 +75,8 @@ export default function AdminLoginPage({ onAuthenticated, onNavigate }: Props) {
             <BarChart3 size={19} className="text-white" />
           </div>
           <div className="text-left">
-            <div className="font-bold text-gray-900 leading-tight">渠鉴</div>
-            <div className="text-[10px] text-gray-400 tracking-widest font-medium">ChannelLens</div>
+            <div className="font-bold text-gray-900 leading-tight">渠评</div>
+            <div className="text-[10px] text-gray-400 tracking-widest font-medium">Quping</div>
           </div>
         </button>
 
