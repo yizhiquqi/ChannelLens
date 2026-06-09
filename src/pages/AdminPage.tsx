@@ -15,9 +15,11 @@ import {
 } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
 import {
+  fetchAdminPartners,
   fetchCooperationReviews,
   fetchCreatorProfiles,
   isSupabaseConfigured,
+  upsertAdminPartners,
   upsertCooperationReviews,
   upsertCreatorProfiles,
 } from '../lib/database';
@@ -371,13 +373,36 @@ export default function AdminPage() {
   useEffect(() => {
     if (partners.length === 0) return;
 
-    const stored = parseStoredArray<AdminPartner>(PARTNER_STORAGE_KEY);
-    if (stored.length > 0) {
-      setEditablePartners(stored);
-      return;
+    let cancelled = false;
+
+    async function loadEditablePartners() {
+      const basePartners = partners.map(toEditablePartner);
+      const stored = parseStoredArray<AdminPartner>(PARTNER_STORAGE_KEY);
+
+      if (!isSupabaseConfigured) {
+        setEditablePartners(stored.length > 0 ? stored : basePartners);
+        return;
+      }
+
+      try {
+        const remotePartners = await fetchAdminPartners<Record<string, unknown>>();
+        if (cancelled) return;
+        const merged = mergeById(
+          remotePartners,
+          mergeById(stored as unknown as Record<string, unknown>[], basePartners as unknown as Record<string, unknown>[])
+        ) as unknown as AdminPartner[];
+        setEditablePartners(merged.length > 0 ? merged : basePartners);
+      } catch {
+        if (cancelled) return;
+        setEditablePartners(stored.length > 0 ? stored : basePartners);
+        setNotice('合作方编辑数据读取失败，当前显示本机缓存或默认档案。');
+      }
     }
 
-    setEditablePartners(partners.map(toEditablePartner));
+    loadEditablePartners();
+    return () => {
+      cancelled = true;
+    };
   }, [partners]);
 
   useEffect(() => {
@@ -444,7 +469,12 @@ export default function AdminPage() {
   function savePartners(nextPartners: AdminPartner[]) {
     setEditablePartners(nextPartners);
     window.localStorage.setItem(PARTNER_STORAGE_KEY, JSON.stringify(nextPartners));
-    setNotice('已保存合作方编辑内容。本版本为前端模拟，数据保存在本机浏览器。');
+    if (isSupabaseConfigured) {
+      upsertAdminPartners(nextPartners as unknown as Record<string, unknown>[]).catch(() => {
+        setNotice('本地已保存，但合作方档案同步云端失败，请稍后重试。');
+      });
+    }
+    setNotice(isSupabaseConfigured ? '已保存合作方档案，并同步到云端数据库。' : '已保存合作方编辑内容，数据保存在本机浏览器。');
   }
 
   function saveCreatorProfiles(nextProfiles: CreatorProfile[]) {
@@ -1164,8 +1194,8 @@ export default function AdminPage() {
 
               <button
                 onClick={() => {
+                  saveCreatorProfiles(creatorProfiles);
                   setEditingCreatorIndex(null);
-                  setNotice('入驻申请编辑已保存。');
                 }}
                 className="w-full inline-flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors text-sm"
               >

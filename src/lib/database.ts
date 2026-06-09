@@ -68,6 +68,37 @@ export async function upsertCreatorProfiles(profiles: JsonRecord[]) {
   if (error) throw error;
 }
 
+export async function fetchAdminPartners<T extends JsonRecord>() {
+  if (!supabase) return [] as T[];
+
+  const { data, error } = await supabase
+    .from('admin_partners')
+    .select('id,payload,created_at,updated_at')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    ...(row.payload as T),
+    id: row.id,
+  })) as T[];
+}
+
+export async function upsertAdminPartners(partners: JsonRecord[]) {
+  if (!supabase) return;
+  const rows = partners.map((partner) => {
+    const id = withId(partner, 'PARTNER');
+    return {
+      id,
+      payload: { ...partner, id },
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  const { error } = await supabase.from('admin_partners').upsert(rows);
+  if (error) throw error;
+}
+
 export async function insertCooperationReview(payload: JsonRecord) {
   const id = withId(payload, 'REVIEW');
   const nextPayload: JsonRecord = { ...payload, id };
