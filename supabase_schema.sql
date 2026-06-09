@@ -55,6 +55,13 @@ to authenticated
 using (true)
 with check (true);
 
+drop policy if exists "authenticated insert partner profiles" on public.partner_profiles;
+create policy "authenticated insert partner profiles"
+on public.partner_profiles
+for insert
+to authenticated
+with check (true);
+
 drop policy if exists "authenticated read cooperation feedback" on public.cooperation_feedback;
 create policy "authenticated read cooperation feedback"
 on public.cooperation_feedback
@@ -68,6 +75,13 @@ on public.cooperation_feedback
 for update
 to authenticated
 using (true)
+with check (true);
+
+drop policy if exists "authenticated insert cooperation feedback" on public.cooperation_feedback;
+create policy "authenticated insert cooperation feedback"
+on public.cooperation_feedback
+for insert
+to authenticated
 with check (true);
 
 drop policy if exists "authenticated read admin partners" on public.admin_partners;
