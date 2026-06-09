@@ -15,7 +15,6 @@ export function Nav({ currentPage, onNavigate }: NavProps) {
     { key: 'creator-onboarding', label: '合作商入驻' },
     { key: 'submit', label: '提交合作反馈' },
     { key: 'due-diligence', label: '申请尽调报告' },
-    { key: 'data-collector', label: '数据整理器' },
   ];
 
   return (
@@ -46,16 +45,6 @@ export function Nav({ currentPage, onNavigate }: NavProps) {
                 {link.label}
               </button>
             ))}
-            <button
-              onClick={() => onNavigate('admin')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                currentPage === 'admin'
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              后台审核
-            </button>
           </div>
 
           <div className="hidden md:flex items-center gap-3">
@@ -82,7 +71,7 @@ export function Nav({ currentPage, onNavigate }: NavProps) {
 
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-1">
-          {[...links, { key: 'admin', label: '后台审核' }].map((link) => (
+          {links.map((link) => (
             <button
               key={link.key}
               onClick={() => {

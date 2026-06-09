@@ -7,6 +7,7 @@ import ChannelDetailPage from './pages/ChannelDetailPage';
 import SubmitReviewPage from './pages/SubmitReviewPage';
 import DueDiligenceRequestPage from './pages/DueDiligenceRequestPage';
 import AdminPage from './pages/AdminPage';
+import AdminLoginPage, { hasAdminSession } from './pages/AdminLoginPage';
 import DataCollectorPage from './pages/DataCollectorPage';
 import CreatorOnboardingPage from './pages/CreatorOnboardingPage';
 
@@ -21,6 +22,7 @@ function getInitialPage(): Page {
 export default function App() {
   const [page, setPage] = useState<Page>(getInitialPage);
   const [detailId, setDetailId] = useState<string>('');
+  const [adminAuthed, setAdminAuthed] = useState(() => hasAdminSession());
 
   function handleNavigate(target: string, id?: string) {
     if (target === 'detail' && id) {
@@ -45,7 +47,13 @@ export default function App() {
         {page === 'detail' && <ChannelDetailPage channelId={detailId} onNavigate={handleNavigate} />}
         {page === 'submit' && <SubmitReviewPage onNavigate={handleNavigate} />}
         {page === 'due-diligence' && <DueDiligenceRequestPage onNavigate={handleNavigate} />}
-        {page === 'admin' && <AdminPage />}
+        {page === 'admin' && (
+          adminAuthed ? (
+            <AdminPage />
+          ) : (
+            <AdminLoginPage onAuthenticated={() => setAdminAuthed(true)} onNavigate={handleNavigate} />
+          )
+        )}
         {page === 'data-collector' && <DataCollectorPage />}
         {page === 'creator-onboarding' && <CreatorOnboardingPage onNavigate={handleNavigate} />}
       </div>

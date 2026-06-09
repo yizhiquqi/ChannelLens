@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle, ChevronLeft, Download, FileText, Link2, ShieldCheck, Upload, Users } from 'lucide-react';
+import { insertCreatorProfile } from '../lib/database';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -242,17 +243,22 @@ export default function CreatorOnboardingPage({ onNavigate }: Props) {
     };
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) {
       setMessage('请先补齐当前身份下带星号的关键字段。');
       return;
     }
 
-    const existing = JSON.parse(localStorage.getItem('channellens_creator_profiles') ?? '[]');
-    existing.push(payload());
-    localStorage.setItem('channellens_creator_profiles', JSON.stringify(existing));
-    setSubmitted(true);
+    try {
+      const saved = await insertCreatorProfile(payload());
+      const existing = JSON.parse(localStorage.getItem('channellens_creator_profiles') ?? '[]');
+      existing.push(saved);
+      localStorage.setItem('channellens_creator_profiles', JSON.stringify(existing));
+      setSubmitted(true);
+    } catch {
+      setMessage('提交到云端数据库失败，请稍后重试，或联系平台管理员。');
+    }
   }
 
   function exportJson() {
@@ -294,8 +300,8 @@ export default function CreatorOnboardingPage({ onNavigate }: Props) {
             ))}
             <p className="text-xs text-gray-400 mt-3">正式上线后，这里会展示后台审核结果，并可通过短信/站内信提醒用户。</p>
           </div>
-          <button onClick={() => onNavigate('admin')} className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors">
-            去后台审核
+          <button onClick={() => onNavigate('home')} className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors">
+            返回主网站
           </button>
         </div>
       </div>

@@ -14,6 +14,13 @@ import {
   X,
 } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
+import {
+  fetchCooperationReviews,
+  fetchCreatorProfiles,
+  isSupabaseConfigured,
+  upsertCooperationReviews,
+  upsertCreatorProfiles,
+} from '../lib/database';
 import type { Partner, CooperationReview } from '../types';
 
 type AdminTab = 'overview' | 'partners' | 'creatorProfiles' | 'reviews';
@@ -129,6 +136,20 @@ function parseStoredArray<T>(key: string): T[] {
   } catch {
     return [];
   }
+}
+
+function mergeById<T extends Record<string, unknown>>(primary: T[], fallback: T[]) {
+  const seen = new Set<string>();
+  const merged: T[] = [];
+
+  [...primary, ...fallback].forEach((item, index) => {
+    const id = typeof item.id === 'string' ? item.id : `LOCAL_${index}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    merged.push(item);
+  });
+
+  return merged;
 }
 
 function TextInput({
@@ -345,6 +366,7 @@ export default function AdminPage() {
   const [editingPartner, setEditingPartner] = useState<AdminPartner | null>(null);
   const [editingCreatorIndex, setEditingCreatorIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
+  const [remoteLoading, setRemoteLoading] = useState(false);
 
   useEffect(() => {
     if (partners.length === 0) return;
@@ -359,8 +381,42 @@ export default function AdminPage() {
   }, [partners]);
 
   useEffect(() => {
-    setCreatorProfiles(parseStoredArray<CreatorProfile>(CREATOR_STORAGE_KEY));
-    setLocalReviews(parseStoredArray<LocalReview>(REVIEW_STORAGE_KEY));
+    let cancelled = false;
+
+    async function loadSubmissions() {
+      const localProfiles = parseStoredArray<CreatorProfile>(CREATOR_STORAGE_KEY);
+      const localFeedback = parseStoredArray<LocalReview>(REVIEW_STORAGE_KEY);
+
+      if (!isSupabaseConfigured) {
+        setCreatorProfiles(localProfiles);
+        setLocalReviews(localFeedback);
+        return;
+      }
+
+      setRemoteLoading(true);
+      try {
+        const [remoteProfiles, remoteFeedback] = await Promise.all([
+          fetchCreatorProfiles<CreatorProfile>(),
+          fetchCooperationReviews<LocalReview>(),
+        ]);
+
+        if (cancelled) return;
+        setCreatorProfiles(mergeById(remoteProfiles as Record<string, unknown>[], localProfiles as Record<string, unknown>[]) as CreatorProfile[]);
+        setLocalReviews(mergeById(remoteFeedback, localFeedback));
+      } catch {
+        if (cancelled) return;
+        setCreatorProfiles(localProfiles);
+        setLocalReviews(localFeedback);
+        setNotice('云端数据读取失败，当前显示本机缓存数据。');
+      } finally {
+        if (!cancelled) setRemoteLoading(false);
+      }
+    }
+
+    loadSubmissions();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const allReviews: LocalReview[] = useMemo(
@@ -394,13 +450,23 @@ export default function AdminPage() {
   function saveCreatorProfiles(nextProfiles: CreatorProfile[]) {
     setCreatorProfiles(nextProfiles);
     window.localStorage.setItem(CREATOR_STORAGE_KEY, JSON.stringify(nextProfiles));
-    setNotice('已保存合作商入驻审核状态。');
+    if (isSupabaseConfigured) {
+      upsertCreatorProfiles(nextProfiles as Record<string, unknown>[]).catch(() => {
+        setNotice('本地已保存，但同步云端数据库失败，请稍后重试。');
+      });
+    }
+    setNotice(isSupabaseConfigured ? '已保存合作商入驻审核状态，并同步到云端数据库。' : '已保存合作商入驻审核状态。');
   }
 
   function saveLocalReviews(nextReviews: LocalReview[]) {
     setLocalReviews(nextReviews);
     window.localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(nextReviews));
-    setNotice('已保存合作反馈审核结果。');
+    if (isSupabaseConfigured) {
+      upsertCooperationReviews(nextReviews).catch(() => {
+        setNotice('本地已保存，但同步云端数据库失败，请稍后重试。');
+      });
+    }
+    setNotice(isSupabaseConfigured ? '已保存合作反馈审核结果，并同步到云端数据库。' : '已保存合作反馈审核结果。');
   }
 
   function setReviewEvidenceStatus(reviewId: string, evidenceStatus: string, reviewStatus: string, defaultNote: string) {
@@ -510,11 +576,13 @@ export default function AdminPage() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <h1 className="text-xl font-bold text-gray-900 mb-1">后台审核管理</h1>
-              <p className="text-sm text-gray-500">直接编辑合作方档案、博主入驻资料、风险标签、核验状态和可见性。</p>
+              <p className="text-sm text-gray-500">直接编辑合作方档案、入驻资料、风险标签、核验状态和可见性。</p>
             </div>
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-3 py-1.5 rounded-lg">
+            <div className={`flex items-center gap-2 border text-xs font-medium px-3 py-1.5 rounded-lg ${
+              isSupabaseConfigured ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'
+            }`}>
               <ShieldAlert size={13} />
-              当前为前端模拟审核
+              {isSupabaseConfigured ? '已连接云端数据库' : '未配置云端数据库'}
             </div>
           </div>
         </div>
@@ -531,10 +599,10 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {notice && (
+        {(remoteLoading || notice) && (
           <div className="mb-6 flex items-start gap-2 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl px-4 py-3">
-            <CheckCircle size={16} className="shrink-0 mt-0.5" />
-            <p className="text-sm">{notice}</p>
+            {remoteLoading ? <Loader2 size={16} className="shrink-0 mt-0.5 animate-spin" /> : <CheckCircle size={16} className="shrink-0 mt-0.5" />}
+            <p className="text-sm">{remoteLoading ? '正在读取云端提交数据...' : notice}</p>
           </div>
         )}
 
@@ -543,7 +611,7 @@ export default function AdminPage() {
             { key: 'overview', label: '概览' },
             { key: 'partners', label: `合作方档案 (${editablePartners.length})` },
             { key: 'creatorProfiles', label: `入驻申请 (${creatorProfiles.length})` },
-            { key: 'reviews', label: `合作反馈 (${reviews.length})` },
+            { key: 'reviews', label: `合作反馈 (${allReviews.length})` },
           ] as const).map((tab) => (
             <button
               key={tab.key}

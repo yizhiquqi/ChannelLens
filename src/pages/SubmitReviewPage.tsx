@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
+import { insertCooperationReview } from '../lib/database';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -125,7 +126,7 @@ export default function SubmitReviewPage({ onNavigate }: Props) {
     });
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.reviewerRole || !form.reviewText || (!form.partnerId && !form.partnerNameFree)) {
       setMessage('请先补齐品牌角色、合作方和合作反馈总结。');
@@ -135,17 +136,24 @@ export default function SubmitReviewPage({ onNavigate }: Props) {
       setMessage('请至少上传一项证据材料，例如合同、转账记录、对账单或聊天截图。');
       return;
     }
-    const existing = JSON.parse(localStorage.getItem('channellens_reviews') ?? '[]');
-    existing.push({
+    const payload = {
       ...form,
-      id: `LOCAL_REVIEW_${Date.now()}`,
+      id: `REVIEW_${Date.now()}`,
       evidenceStatus: 'pending_review',
       reviewStatus: 'pending',
       submittedAt: new Date().toISOString(),
       status: 'pending',
-    });
-    localStorage.setItem('channellens_reviews', JSON.stringify(existing));
-    setSubmitted(true);
+    };
+
+    try {
+      const saved = await insertCooperationReview(payload);
+      const existing = JSON.parse(localStorage.getItem('channellens_reviews') ?? '[]');
+      existing.push(saved);
+      localStorage.setItem('channellens_reviews', JSON.stringify(existing));
+      setSubmitted(true);
+    } catch {
+      setMessage('提交到云端数据库失败，请稍后重试，或联系平台管理员。');
+    }
   }
 
   const inputClass = 'w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white';
