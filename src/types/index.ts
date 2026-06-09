@@ -51,6 +51,9 @@ export interface Partner {
   scores: PartnerScores;
   publicCases?: string;
   caseVerificationStatus?: string;
+  publicCaseSource?: string;
+  publicCaseVerificationNote?: string;
+  adminRelationships?: PartnerRelationship[];
   dataSource?: string;
   description?: string;
   followerCount?: string;

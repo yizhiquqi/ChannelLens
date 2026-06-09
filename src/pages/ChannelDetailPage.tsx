@@ -280,7 +280,7 @@ function IdentityModule({ partner }: { partner: Partner }) {
       {partner.entityType === 'person' && (
         <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-2 text-xs text-blue-700">
           <CheckCircle size={13} className="shrink-0 mt-0.5" />
-          <p>为保护个人隐私，本页面仅展示公开的业务身份和合作能力信息，不展示个人联系方式、证件、家庭地址等隐私字段。</p>
+          <p>仅展示公开业务身份和合作能力信息，不展示个人联系方式、证件、地址等隐私字段。</p>
         </div>
       )}
     </div>
@@ -370,6 +370,22 @@ function PublicCasesModule({ partner }: { partner: Partner }) {
           <Tag className={VERIFICATION_STYLES[partner.caseVerificationStatus] ?? VERIFICATION_STYLES['未核验']}>
             {partner.caseVerificationStatus}
           </Tag>
+        </div>
+      )}
+      {(partner.publicCaseSource || partner.publicCaseVerificationNote) && (
+        <div className="mt-3 grid sm:grid-cols-2 gap-3">
+          {partner.publicCaseSource && (
+            <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+              <div className="text-[10px] text-gray-400 mb-0.5">Public source</div>
+              <div className="text-xs text-gray-700 break-all">{partner.publicCaseSource}</div>
+            </div>
+          )}
+          {partner.publicCaseVerificationNote && (
+            <div className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+              <div className="text-[10px] text-gray-400 mb-0.5">Verification note</div>
+              <div className="text-xs text-gray-700">{partner.publicCaseVerificationNote}</div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -577,7 +593,9 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
   const verifiedReviews = reviews.filter(
     (r) => r.partnerId === channelId && r.reviewStatus === 'verified'
   );
-  const partnerRelationships = relationships.filter((r) => r.partnerId === channelId);
+  const partnerRelationships = partner.adminRelationships?.length
+    ? partner.adminRelationships
+    : relationships.filter((r) => r.partnerId === channelId);
   const riskCfg = RISK_LEVEL_CONFIG[partner.riskLevel] ?? RISK_LEVEL_CONFIG.low;
 
   return (

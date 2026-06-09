@@ -246,6 +246,28 @@ export async function fetchCooperationReviews<T extends JsonRecord>() {
   })) as T[];
 }
 
+export async function fetchPublicCooperationReviews<T extends DataObject>() {
+  if (!supabase) return [] as T[];
+
+  const { data, error } = await supabase
+    .from('cooperation_feedback')
+    .select('id,review_status,evidence_status,payload,created_at,updated_at')
+    .eq('review_status', 'verified')
+    .eq('evidence_status', 'verified')
+    .order('created_at', { ascending: false });
+
+  if (error) return [] as T[];
+
+  return (data ?? []).map((row) => ({
+    ...(row.payload as T),
+    id: row.id,
+    reviewStatus: row.review_status,
+    evidenceStatus: row.evidence_status,
+    createdAt: (row.payload as JsonRecord)?.createdAt ?? row.created_at,
+    submittedAt: (row.payload as JsonRecord)?.submittedAt ?? row.created_at,
+  })) as T[];
+}
+
 export async function upsertCooperationReviews(reviews: JsonRecord[]) {
   if (!supabase) return;
   const rows = reviews.map((review) => {

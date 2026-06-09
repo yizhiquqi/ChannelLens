@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { loadPartners, loadReviews, loadRelationships } from '../lib/csvLoader';
-import { fetchPartnerVisibilityOverrides, fetchPublicAdminPartners, isSupabaseConfigured } from '../lib/database';
+import { fetchPartnerVisibilityOverrides, fetchPublicAdminPartners, fetchPublicCooperationReviews, isSupabaseConfigured } from '../lib/database';
 import type { Partner, CooperationReview, PartnerRelationship } from '../types';
 
 interface CSVDataState {
@@ -36,8 +36,8 @@ export function CSVDataProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        Promise.all([fetchPublicAdminPartners<Partner>(), fetchPartnerVisibilityOverrides()])
-          .then(([adminPartners, visibilityOverrides]) => {
+        Promise.all([fetchPublicAdminPartners<Partner>(), fetchPartnerVisibilityOverrides(), fetchPublicCooperationReviews<CooperationReview>()])
+          .then(([adminPartners, visibilityOverrides, publicReviews]) => {
             const visibilityMap = new Map(visibilityOverrides.map((item) => [item.id, item.visibility]));
             const publicAdminPartners = adminPartners.filter((partner) => partner.adminVisibility === 'public');
             const visibleCsvPartners = partners.filter((partner) => visibilityMap.get(partner.id) !== 'internal');
@@ -47,7 +47,13 @@ export function CSVDataProvider({ children }: { children: ReactNode }) {
               seen.add(partner.id);
               return true;
             });
-            setState({ partners: mergedPartners, reviews, relationships, loading: false, error: null });
+            const reviewSeen = new Set<string>();
+            const mergedReviews = [...publicReviews, ...reviews].filter((review) => {
+              if (reviewSeen.has(review.id)) return false;
+              reviewSeen.add(review.id);
+              return true;
+            });
+            setState({ partners: mergedPartners, reviews: mergedReviews, relationships, loading: false, error: null });
           })
           .catch(() => {
             setState({ partners, reviews, relationships, loading: false, error: null });

@@ -241,6 +241,39 @@ function splitTags(value: string) {
     .filter(Boolean);
 }
 
+
+function serializeRelationships(partner: AdminPartner) {
+  return (partner.adminRelationships ?? [])
+    .map((rel) => [
+      rel.relatedPartnerName,
+      rel.relationshipType,
+      rel.sourceType,
+      rel.verificationStatus,
+      rel.notes,
+    ].join(' | '))
+    .join('\n');
+}
+
+function parseRelationships(value: string, partnerId: string): Partner['adminRelationships'] {
+  return value
+    .split(/\n/)
+    .map((line, index) => {
+      const [name = '', type = '', source = '', status = '', notes = ''] = line.split('|').map((item) => item.trim());
+      if (!name && !type && !source && !status && !notes) return null;
+      return {
+        id: partnerId + '_REL_' + (index + 1),
+        partnerId,
+        relatedPartnerId: '',
+        relatedPartnerName: name || 'Unnamed relation',
+        relationshipType: type || 'Related party',
+        sourceType: source || 'Admin edit',
+        verificationStatus: status || '???',
+        notes,
+      };
+    })
+    .filter(Boolean) as Partner['adminRelationships'];
+}
+
 function creatorSubjectChain(profile: CreatorProfile) {
   if (profile.subjectChain) return String(profile.subjectChain);
   if (profile.partnerRole === 'brand') return `${profile.companyName || '未填公司主体'} -> ${profile.brandName || '未填品牌'}`;
@@ -445,14 +478,14 @@ export default function AdminPage() {
   }, []);
 
   const allReviews: LocalReview[] = useMemo(
-    () => [
-      ...localReviews,
-      ...reviews.map((review) => ({
+    () => mergeById(
+      localReviews,
+      reviews.map((review) => ({
         ...review,
         reviewStatus: review.reviewStatus,
         evidenceStatus: review.evidenceStatus,
-      })),
-    ],
+      })) as unknown as LocalReview[]
+    ),
     [localReviews, reviews]
   );
 
@@ -500,20 +533,35 @@ export default function AdminPage() {
   }
 
   function setReviewEvidenceStatus(reviewId: string, evidenceStatus: string, reviewStatus: string, defaultNote: string) {
-    const note = window.prompt('填写证据审核备注/给提交方的提示：', defaultNote);
+    const note = window.prompt('Evidence review note / user-facing message:', defaultNote);
     if (note === null) return;
 
+    const currentReview = allReviews.find((review) => review.id === reviewId);
+    if (!currentReview) return;
+
+    const reviewedAt = new Date().toISOString();
+    const updatedReview = {
+      ...currentReview,
+      evidenceStatus,
+      reviewStatus,
+      evidenceReviewNote: note,
+      evidenceReviewedAt: reviewedAt,
+    };
+
     saveLocalReviews(
-      localReviews.map((review) =>
-        review.id === reviewId
-          ? {
-              ...review,
-              evidenceStatus,
-              reviewStatus,
-              evidenceReviewNote: note,
-              evidenceReviewedAt: new Date().toISOString(),
-            }
-          : review
+      mergeById(
+        [updatedReview],
+        localReviews.map((review) =>
+          review.id === reviewId
+            ? {
+                ...review,
+                evidenceStatus,
+                reviewStatus,
+                evidenceReviewNote: note,
+                evidenceReviewedAt: reviewedAt,
+              }
+            : review
+        )
       )
     );
   }
@@ -955,7 +1003,6 @@ export default function AdminPage() {
               allReviews.map((review) => {
                 const reviewStatus = String(review.reviewStatus ?? 'pending');
                 const statusMeta = statusLabels[reviewStatus] ?? statusLabels.pending;
-                const isLocal = localReviews.some((item) => item.id === review.id);
                 const evidenceStatus = String(review.evidenceStatus ?? 'pending_review');
                 const evidenceLabel =
                   evidenceStatus === 'verified'
@@ -1010,7 +1057,7 @@ export default function AdminPage() {
                       {review.evidenceNote && <p className="text-xs text-gray-500 mt-2">说明：{review.evidenceNote}</p>}
                       {review.evidenceReviewNote && <p className="text-xs text-blue-600 mt-2">审核备注：{review.evidenceReviewNote}</p>}
                     </div>
-                    {isLocal && (
+                    {(
                       <div className="flex flex-wrap gap-1.5 mt-3">
                         <button
                           onClick={() => setReviewEvidenceStatus(review.id, 'verified', 'verified', '证据材料已核验，合作反馈通过审核。')}
@@ -1105,6 +1152,48 @@ export default function AdminPage() {
                 placeholder="多个标签用逗号分隔，例如：信息待补充，签约关系需持续核验"
                 onChange={(value) => setEditingPartner({ ...editingPartner, riskTags: splitTags(value) })}
               />
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-4">
+                <div>
+                  <div className="text-xs font-bold text-gray-900">C. Public cases</div>
+                  <div className="text-xs text-gray-400 mt-1">Edit public cases, sources, and verification notes.</div>
+                </div>
+                <TextArea
+                  label="Public cases / source material"
+                  value={editingPartner.publicCases ?? ''}
+                  onChange={(value) => setEditingPartner({ ...editingPartner, publicCases: value })}
+                />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <SelectInput
+                    label="Case verification status"
+                    value={editingPartner.caseVerificationStatus ?? '未核验'}
+                    options={verificationOptions}
+                    onChange={(value) => setEditingPartner({ ...editingPartner, caseVerificationStatus: value })}
+                  />
+                  <TextInput
+                    label="Public source"
+                    value={editingPartner.publicCaseSource ?? ''}
+                    onChange={(value) => setEditingPartner({ ...editingPartner, publicCaseSource: value })}
+                    placeholder="Website, platform profile, news link, screenshot source..."
+                  />
+                </div>
+                <TextArea
+                  label="Case verification note"
+                  value={editingPartner.publicCaseVerificationNote ?? ''}
+                  onChange={(value) => setEditingPartner({ ...editingPartner, publicCaseVerificationNote: value })}
+                />
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-4">
+                <div>
+                  <div className="text-xs font-bold text-blue-900">D. Company / creator / team relationships</div>
+                  <div className="text-xs text-blue-700 mt-1">One per line: name | relationship | source | verification | note</div>
+                </div>
+                <TextArea
+                  label="Relationship records"
+                  value={serializeRelationships(editingPartner)}
+                  placeholder="Example MCN | signed agency | public profile | partially verified | needs ongoing verification"
+                  onChange={(value) => setEditingPartner({ ...editingPartner, adminRelationships: parseRelationships(value, editingPartner.id) })}
+                />
+              </div>
               <TextArea label="审核备注" value={editingPartner.adminNotes ?? ''} onChange={(value) => setEditingPartner({ ...editingPartner, adminNotes: value })} />
 
               <button

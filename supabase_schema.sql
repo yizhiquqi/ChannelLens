@@ -153,6 +153,13 @@ using (
   or lower(payload ->> 'userEmail') = lower(auth.jwt() ->> 'email')
 );
 
+drop policy if exists "public read verified cooperation feedback" on public.cooperation_feedback;
+create policy "public read verified cooperation feedback"
+on public.cooperation_feedback
+for select
+to anon, authenticated
+using (review_status = 'verified' and evidence_status = 'verified');
+
 drop policy if exists "authenticated update cooperation feedback" on public.cooperation_feedback;
 create policy "authenticated update cooperation feedback"
 on public.cooperation_feedback
