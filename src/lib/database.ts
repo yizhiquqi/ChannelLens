@@ -19,6 +19,21 @@ export type EvidenceUpload = {
   type: string;
 };
 
+function safeStorageFileName(fileName: string) {
+  const parts = fileName.split('.');
+  const rawExtension = parts.length > 1 ? parts.pop() ?? '' : '';
+  const rawBase = parts.join('.') || fileName;
+  const extension = rawExtension.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+  const base = rawBase
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+
+  return `${base || 'file'}${extension ? `.${extension}` : ''}`;
+}
+
 function withId(payload: JsonRecord, prefix: string) {
   const existingId = typeof payload.id === 'string' ? payload.id : '';
   return existingId || `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -198,7 +213,7 @@ export async function uploadEvidenceFiles(files: File[], ownerId?: string) {
   const uploaded: EvidenceUpload[] = [];
 
   for (const file of files) {
-    const safeName = file.name.replace(/[^\w.\-\u4e00-\u9fa5]/g, '_');
+    const safeName = safeStorageFileName(file.name);
     const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
     const { error } = await supabase.storage.from('evidence-files').upload(path, file, {
       cacheControl: '3600',
