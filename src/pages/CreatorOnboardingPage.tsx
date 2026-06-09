@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { AlertCircle, CheckCircle, ChevronLeft, Download, FileText, Link2, ShieldCheck, Upload, Users } from 'lucide-react';
 import { insertCreatorProfile } from '../lib/database';
 
 interface Props {
   onNavigate: (page: string) => void;
+  user?: User;
 }
 
 type PartnerRole = 'creator' | 'mcn' | 'brand' | 'service';
@@ -197,7 +199,7 @@ function SelectInput({
   );
 }
 
-export default function CreatorOnboardingPage({ onNavigate }: Props) {
+export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
   const [form, setForm] = useState<OnboardingForm>(initialForm);
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState('');
@@ -238,6 +240,8 @@ export default function CreatorOnboardingPage({ onNavigate }: Props) {
       subjectChain: subjectChain(),
       completion,
       completionStage,
+      userId: user?.id,
+      userEmail: user?.email,
       submittedAt: new Date().toISOString(),
       status: 'pending',
     };
@@ -300,8 +304,8 @@ export default function CreatorOnboardingPage({ onNavigate }: Props) {
             ))}
             <p className="text-xs text-gray-400 mt-3">正式上线后，这里会展示后台审核结果，并可通过短信/站内信提醒用户。</p>
           </div>
-          <button onClick={() => onNavigate('home')} className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors">
-            返回主网站
+          <button onClick={() => onNavigate(user ? 'account' : 'home')} className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors">
+            {user ? '查看我的审核状态' : '返回主网站'}
           </button>
         </div>
       </div>

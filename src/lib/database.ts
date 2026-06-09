@@ -24,11 +24,24 @@ export async function insertCreatorProfile(payload: JsonRecord) {
     return { ...nextPayload, storage: 'local' };
   }
 
-  const { error } = await supabase.from('partner_profiles').insert({
+  const row = {
     id,
+    user_id: typeof nextPayload.userId === 'string' ? nextPayload.userId : null,
+    user_email: typeof nextPayload.userEmail === 'string' ? nextPayload.userEmail : null,
     status: String(nextPayload.status ?? 'pending'),
     payload: nextPayload,
-  });
+  };
+
+  const { error } = await supabase.from('partner_profiles').insert(row);
+  if (error && String(error.message).includes('user_id')) {
+    const { error: fallbackError } = await supabase.from('partner_profiles').insert({
+      id,
+      status: String(nextPayload.status ?? 'pending'),
+      payload: nextPayload,
+    });
+    if (fallbackError) throw fallbackError;
+    return { ...nextPayload, storage: 'supabase' };
+  }
 
   if (error) throw error;
   return { ...nextPayload, storage: 'supabase' };
@@ -37,18 +50,29 @@ export async function insertCreatorProfile(payload: JsonRecord) {
 export async function fetchCreatorProfiles<T extends JsonRecord>() {
   if (!supabase) return [] as T[];
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('partner_profiles')
-    .select('id,status,payload,created_at,updated_at')
+    .select('id,user_id,user_email,status,payload,created_at,updated_at')
     .order('created_at', { ascending: false });
+
+  if (error && String(error.message).includes('user_id')) {
+    const fallback = await supabase
+      .from('partner_profiles')
+      .select('id,status,payload,created_at,updated_at')
+      .order('created_at', { ascending: false });
+    data = fallback.data as typeof data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
+  return ((data ?? []) as Array<JsonRecord & { payload: JsonRecord }>).map((row) => ({
     ...(row.payload as T),
     id: row.id,
+    userId: row.user_id ?? row.payload.userId,
+    userEmail: row.user_email ?? row.payload.userEmail,
     status: row.status,
-    submittedAt: (row.payload as JsonRecord)?.submittedAt ?? row.created_at,
+    submittedAt: row.payload.submittedAt ?? row.created_at,
   })) as T[];
 }
 
@@ -58,13 +82,27 @@ export async function upsertCreatorProfiles(profiles: JsonRecord[]) {
     const id = withId(profile, 'PROFILE');
     return {
       id,
+      user_id: typeof profile.userId === 'string' ? profile.userId : null,
+      user_email: typeof profile.userEmail === 'string' ? profile.userEmail : null,
       status: String(profile.status ?? 'pending'),
       payload: { ...profile, id },
       updated_at: new Date().toISOString(),
     };
   });
 
-  const { error } = await supabase.from('partner_profiles').upsert(rows);
+  let { error } = await supabase.from('partner_profiles').upsert(rows);
+  if (error && String(error.message).includes('user_id')) {
+    const fallbackRows = profiles.map((profile) => {
+      const id = withId(profile, 'PROFILE');
+      return {
+        id,
+        status: String(profile.status ?? 'pending'),
+        payload: { ...profile, id },
+        updated_at: new Date().toISOString(),
+      };
+    });
+    error = (await supabase.from('partner_profiles').upsert(fallbackRows)).error;
+  }
   if (error) throw error;
 }
 

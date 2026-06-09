@@ -1,10 +1,15 @@
 create table if not exists public.partner_profiles (
   id text primary key,
+  user_id uuid references auth.users(id),
+  user_email text,
   status text not null default 'pending',
   payload jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.partner_profiles add column if not exists user_id uuid references auth.users(id);
+alter table public.partner_profiles add column if not exists user_email text;
 
 create table if not exists public.cooperation_feedback (
   id text primary key,
@@ -22,9 +27,21 @@ create table if not exists public.admin_partners (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.user_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text,
+  role text not null default 'partner',
+  display_name text,
+  phone text,
+  company_name text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.partner_profiles enable row level security;
 alter table public.cooperation_feedback enable row level security;
 alter table public.admin_partners enable row level security;
+alter table public.user_profiles enable row level security;
 
 drop policy if exists "public insert partner profiles" on public.partner_profiles;
 create policy "public insert partner profiles"
@@ -61,6 +78,28 @@ on public.partner_profiles
 for insert
 to authenticated
 with check (true);
+
+drop policy if exists "users read own profiles" on public.user_profiles;
+create policy "users read own profiles"
+on public.user_profiles
+for select
+to authenticated
+using (id = auth.uid());
+
+drop policy if exists "users insert own profiles" on public.user_profiles;
+create policy "users insert own profiles"
+on public.user_profiles
+for insert
+to authenticated
+with check (id = auth.uid());
+
+drop policy if exists "users update own profiles" on public.user_profiles;
+create policy "users update own profiles"
+on public.user_profiles
+for update
+to authenticated
+using (id = auth.uid())
+with check (id = auth.uid());
 
 drop policy if exists "authenticated read cooperation feedback" on public.cooperation_feedback;
 create policy "authenticated read cooperation feedback"

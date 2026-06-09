@@ -4,9 +4,11 @@ import { Search, BarChart3, Menu, X } from 'lucide-react';
 interface NavProps {
   currentPage: string;
   onNavigate: (page: string, id?: string) => void;
+  userEmail?: string;
+  onSignOut?: () => void;
 }
 
-export function Nav({ currentPage, onNavigate }: NavProps) {
+export function Nav({ currentPage, onNavigate, userEmail, onSignOut }: NavProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const links = [
@@ -56,6 +58,12 @@ export function Nav({ currentPage, onNavigate }: NavProps) {
               搜索
             </button>
             <button
+              onClick={() => onNavigate(userEmail ? 'account' : 'login')}
+              className="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors max-w-[180px] truncate"
+            >
+              {userEmail ? userEmail : '登录'}
+            </button>
+            <button
               onClick={() => onNavigate('creator-onboarding')}
               className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
@@ -85,6 +93,28 @@ export function Nav({ currentPage, onNavigate }: NavProps) {
               {link.label}
             </button>
           ))}
+          <button
+            onClick={() => {
+              onNavigate(userEmail ? 'account' : 'login');
+              setMobileOpen(false);
+            }}
+            className={`block w-full text-left px-3 py-2 rounded-md text-sm font-medium ${
+              currentPage === 'login' || currentPage === 'account' ? 'text-blue-600 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {userEmail ? `我的账号：${userEmail}` : '登录'}
+          </button>
+          {userEmail && onSignOut && (
+            <button
+              onClick={() => {
+                onSignOut();
+                setMobileOpen(false);
+              }}
+              className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:bg-gray-50"
+            >
+              退出登录
+            </button>
+          )}
         </div>
       )}
     </nav>
