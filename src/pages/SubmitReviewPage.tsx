@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { ChevronLeft, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
-import { insertCooperationReview, uploadEvidenceFiles, type EvidenceUpload } from '../lib/database';
+import { insertCooperationReview, isSupabaseConfigured, uploadEvidenceFiles, type EvidenceUpload } from '../lib/database';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -139,6 +139,10 @@ export default function SubmitReviewPage({ onNavigate, user }: Props) {
     }
     if (selectedFiles.length === 0 && form.evidenceFiles.length === 0) {
       setMessage('请至少上传一项证据材料，例如合同、转账记录、对账单或聊天截图。');
+      return;
+    }
+    if (isSupabaseConfigured && !user && selectedFiles.length > 0) {
+      setMessage('上传合同、转账记录或截图前请先登录账号，这样后台才能安全审核你的证据材料。');
       return;
     }
 

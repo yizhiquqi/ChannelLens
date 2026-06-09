@@ -208,6 +208,15 @@ export async function uploadEvidenceFiles(files: File[], ownerId?: string) {
   return uploaded;
 }
 
+export async function createEvidenceFileUrl(path: string) {
+  if (!supabase) return path;
+
+  const { data, error } = await supabase.storage.from('evidence-files').createSignedUrl(path, 60 * 10);
+  if (error) throw error;
+
+  return data.signedUrl;
+}
+
 export async function insertCooperationReview(payload: JsonRecord) {
   const id = withId(payload, 'REVIEW');
   const nextPayload: JsonRecord = { ...payload, id };

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { AlertCircle, CheckCircle, ChevronLeft, Download, FileText, Link2, ShieldCheck, Upload, Users } from 'lucide-react';
-import { insertCreatorProfile } from '../lib/database';
+import { insertCreatorProfile, isSupabaseConfigured, uploadEvidenceFiles, type EvidenceUpload } from '../lib/database';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -84,6 +84,12 @@ const initialForm = {
   paymentIssues: '',
   fulfillment: '',
   controversy: '',
+  identityFileNames: [] as string[],
+  identityFilePaths: [] as string[],
+  identityFileMeta: [] as EvidenceUpload[],
+  caseFileNames: [] as string[],
+  caseFilePaths: [] as string[],
+  caseFileMeta: [] as EvidenceUpload[],
   truthConsent: false,
 };
 
@@ -202,6 +208,8 @@ function SelectInput({
 export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
   const [form, setForm] = useState<OnboardingForm>(initialForm);
   const [editingProfileId, setEditingProfileId] = useState('');
+  const [identityFiles, setIdentityFiles] = useState<File[]>([]);
+  const [caseFiles, setCaseFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -229,6 +237,17 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
 
   function f(patch: Partial<OnboardingForm>) {
     setForm((prev) => ({ ...prev, ...patch }));
+  }
+
+  function setUploadFiles(kind: 'identity' | 'case', files: File[]) {
+    if (kind === 'identity') {
+      setIdentityFiles(files);
+      f({ identityFileNames: files.map((file) => file.name) });
+      return;
+    }
+
+    setCaseFiles(files);
+    f({ caseFileNames: files.map((file) => file.name) });
   }
 
   function validate() {
@@ -270,9 +289,25 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
       setMessage('请先补齐当前身份下带星号的关键字段。');
       return;
     }
+    if (isSupabaseConfigured && !user && (identityFiles.length > 0 || caseFiles.length > 0)) {
+      setMessage('上传证件、合同或截图前请先登录账号，这样后台才能安全查看你的材料。');
+      return;
+    }
 
     try {
-      const saved = await insertCreatorProfile(payload());
+      const [uploadedIdentityFiles, uploadedCaseFiles] = await Promise.all([
+        identityFiles.length > 0 ? uploadEvidenceFiles(identityFiles, user?.id) : Promise.resolve(form.identityFileMeta),
+        caseFiles.length > 0 ? uploadEvidenceFiles(caseFiles, user?.id) : Promise.resolve(form.caseFileMeta),
+      ]);
+      const saved = await insertCreatorProfile({
+        ...payload(),
+        identityFileNames: uploadedIdentityFiles.map((file) => file.name),
+        identityFilePaths: uploadedIdentityFiles.map((file) => file.path),
+        identityFileMeta: uploadedIdentityFiles,
+        caseFileNames: uploadedCaseFiles.map((file) => file.name),
+        caseFilePaths: uploadedCaseFiles.map((file) => file.path),
+        caseFileMeta: uploadedCaseFiles,
+      });
       const existing = JSON.parse(localStorage.getItem('channellens_creator_profiles') ?? '[]');
       const next = editingProfileId
         ? existing.map((item: { id?: string }) => (item.id === editingProfileId ? saved : item))
@@ -404,13 +439,23 @@ export default function CreatorOnboardingPage({ onNavigate, user }: Props) {
               </button>
               <label className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-blue-100 text-blue-700 text-sm font-semibold rounded-xl cursor-pointer hover:bg-blue-50">
                 <Upload size={16} />
-                上传身份证/营业执照
-                <input type="file" className="hidden" multiple />
+                {form.identityFileNames.length > 0 ? `主体资料 ${form.identityFileNames.length} 个` : '上传身份证/营业执照'}
+                <input
+                  type="file"
+                  className="hidden"
+                  multiple
+                  onChange={(event) => setUploadFiles('identity', Array.from(event.target.files ?? []))}
+                />
               </label>
               <label className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-blue-100 text-blue-700 text-sm font-semibold rounded-xl cursor-pointer hover:bg-blue-50">
                 <FileText size={16} />
-                上传授权/案例截图
-                <input type="file" className="hidden" multiple />
+                {form.caseFileNames.length > 0 ? `授权/案例 ${form.caseFileNames.length} 个` : '上传授权/案例截图'}
+                <input
+                  type="file"
+                  className="hidden"
+                  multiple
+                  onChange={(event) => setUploadFiles('case', Array.from(event.target.files ?? []))}
+                />
               </label>
             </div>
 

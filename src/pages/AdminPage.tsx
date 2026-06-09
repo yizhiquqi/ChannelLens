@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
 import {
+  createEvidenceFileUrl,
   fetchAdminPartners,
   fetchCooperationReviews,
   fetchCreatorProfiles,
@@ -41,6 +42,8 @@ type LocalReview = Record<string, unknown> & {
   createdAt?: string;
   partnerNameFree?: string;
   evidenceFiles?: string[];
+  evidenceFilePaths?: string[];
+  evidenceFileMeta?: Array<{ name?: string; path?: string; size?: number; type?: string }>;
   evidenceNote?: string;
   evidenceReviewNote?: string;
   evidenceReviewedAt?: string;
@@ -49,7 +52,7 @@ type LocalReview = Record<string, unknown> & {
   submittedAt?: string;
 };
 
-type CreatorProfile = Record<string, string | boolean | number | undefined> & {
+type CreatorProfile = Record<string, unknown> & {
   partnerRole?: string;
   contactName?: string;
   creatorName?: string;
@@ -91,6 +94,12 @@ type CreatorProfile = Record<string, string | boolean | number | undefined> & {
   reviewNote?: string;
   reviewedAt?: string;
   submittedAt?: string;
+  identityFileNames?: string[];
+  identityFilePaths?: string[];
+  identityFileMeta?: Array<{ name?: string; path?: string; size?: number; type?: string }>;
+  caseFileNames?: string[];
+  caseFilePaths?: string[];
+  caseFileMeta?: Array<{ name?: string; path?: string; size?: number; type?: string }>;
 };
 
 const PARTNER_STORAGE_KEY = 'channellens_admin_partners';
@@ -580,6 +589,39 @@ export default function AdminPage() {
     );
   }
 
+  async function openEvidenceFile(review: LocalReview, index: number) {
+    const path = review.evidenceFilePaths?.[index] || review.evidenceFileMeta?.[index]?.path;
+    if (!path) {
+      window.alert('这条证据只有文件名，没有可打开的存储路径。请让提交方重新上传一次。');
+      return;
+    }
+
+    try {
+      const url = await createEvidenceFileUrl(path);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      window.alert('证据文件暂时打不开，可能是存储权限或登录状态问题。');
+    }
+  }
+
+  async function openCreatorFile(profile: CreatorProfile, kind: 'identity' | 'case', index: number) {
+    const paths = kind === 'identity' ? profile.identityFilePaths : profile.caseFilePaths;
+    const meta = kind === 'identity' ? profile.identityFileMeta : profile.caseFileMeta;
+    const path = paths?.[index] || meta?.[index]?.path;
+
+    if (!path) {
+      window.alert('这份材料只有文件名，没有可打开的存储路径。请让提交方重新上传一次。');
+      return;
+    }
+
+    try {
+      const url = await createEvidenceFileUrl(path);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      window.alert('材料暂时打不开，可能是存储权限或登录状态问题。');
+    }
+  }
+
   function saveEditingPartner() {
     if (!editingPartner) return;
     savePartners(editablePartners.map((partner) => (partner.id === editingPartner.id ? editingPartner : partner)));
@@ -904,6 +946,8 @@ export default function AdminPage() {
                       const statusMeta = statusLabels[status] ?? statusLabels.pending;
                       const checklist = reviewChecklist(profile);
                       const doneCount = checklist.filter((item) => item.done).length;
+                      const identityFileNames = profile.identityFileNames ?? [];
+                      const caseFileNames = profile.caseFileNames ?? [];
                       return (
                         <tr key={`${profile.creatorName}-${index}`} className="hover:bg-gray-50">
                           <td className="px-4 py-3">
@@ -943,6 +987,48 @@ export default function AdminPage() {
                                   {item.done ? '✓' : '○'} {item.label}
                                 </div>
                               ))}
+                              {(identityFileNames.length > 0 || caseFileNames.length > 0) && (
+                                <div className="flex flex-wrap gap-1 pt-1">
+                                  {identityFileNames.map((file, fileIndex) => {
+                                    const hasPath = Boolean(profile.identityFilePaths?.[fileIndex] || profile.identityFileMeta?.[fileIndex]?.path);
+
+                                    return (
+                                      <button
+                                        key={`identity-${file}-${fileIndex}`}
+                                        type="button"
+                                        onClick={() => openCreatorFile(profile, 'identity', fileIndex)}
+                                        disabled={!hasPath}
+                                        className={`text-[10px] border px-1.5 py-0.5 rounded ${
+                                          hasPath
+                                            ? 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100'
+                                            : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed'
+                                        }`}
+                                      >
+                                        主体:{file}
+                                      </button>
+                                    );
+                                  })}
+                                  {caseFileNames.map((file, fileIndex) => {
+                                    const hasPath = Boolean(profile.caseFilePaths?.[fileIndex] || profile.caseFileMeta?.[fileIndex]?.path);
+
+                                    return (
+                                      <button
+                                        key={`case-${file}-${fileIndex}`}
+                                        type="button"
+                                        onClick={() => openCreatorFile(profile, 'case', fileIndex)}
+                                        disabled={!hasPath}
+                                        className={`text-[10px] border px-1.5 py-0.5 rounded ${
+                                          hasPath
+                                            ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+                                            : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed'
+                                        }`}
+                                      >
+                                        案例:{file}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3">
@@ -1067,9 +1153,26 @@ export default function AdminPage() {
                       <div className="text-xs font-semibold text-gray-700 mb-2">证据材料</div>
                       {review.evidenceFiles && review.evidenceFiles.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {review.evidenceFiles.map((file) => (
-                            <span key={file} className="text-[10px] bg-white border border-gray-200 text-gray-600 px-2 py-1 rounded-md">{file}</span>
-                          ))}
+                          {review.evidenceFiles.map((file, fileIndex) => {
+                            const hasPath = Boolean(review.evidenceFilePaths?.[fileIndex] || review.evidenceFileMeta?.[fileIndex]?.path);
+
+                            return (
+                              <button
+                                key={`${file}-${fileIndex}`}
+                                type="button"
+                                onClick={() => openEvidenceFile(review, fileIndex)}
+                                disabled={!hasPath}
+                                className={`text-[10px] border px-2 py-1 rounded-md ${
+                                  hasPath
+                                    ? 'bg-white text-blue-700 border-blue-100 hover:bg-blue-50'
+                                    : 'bg-white text-gray-400 border-gray-200 cursor-not-allowed'
+                                }`}
+                                title={hasPath ? '打开证据文件' : '缺少文件路径，无法在线打开'}
+                              >
+                                {file}
+                              </button>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="text-xs text-gray-400">无上传文件记录</div>
