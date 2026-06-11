@@ -4,6 +4,7 @@ import type {
   PartnerScores, EntityType, VerificationStatus, RiskLevel,
   CooperationResult, ReviewerRole, RecommendType, EvidenceStatus, ReviewStatus,
 } from '../types';
+import { getPublicDataSourceLabel } from './displaySources';
 
 function splitField(value: string): string[] {
   if (!value || value.trim() === '' || value.trim().startsWith('#')) return [];
@@ -142,7 +143,7 @@ function parsePartnerRow(row: PartnerRow): Partner {
     foundedDate: row.founded_date || undefined,
     legalRepresentative: row.legal_representative || undefined,
     businessStatus: row.business_status || undefined,
-    businessInfoSource: row.business_info_source || undefined,
+    businessInfoSource: row.entity_type === 'company' ? '企信通' : (row.business_info_source || undefined),
     city: row.city,
     coverageArea: splitField(row.coverage_area),
     partnerType: splitField(row.partner_type),
@@ -159,7 +160,7 @@ function parsePartnerRow(row: PartnerRow): Partner {
     scores,
     publicCases: row.public_cases || undefined,
     caseVerificationStatus: row.case_verification_status || undefined,
-    dataSource: row.data_source || undefined,
+    dataSource: getPublicDataSourceLabel(row.data_source) || undefined,
     description: row.Introduction || row.public_cases || undefined,
     updatedAt: row.updated_at,
   };

@@ -1,4 +1,5 @@
 import type { CooperationReview, Partner } from '../types';
+import { getPublicDataSourceLabel } from './displaySources';
 
 export interface CompanyPageProfile {
   id: string;
@@ -141,7 +142,7 @@ export function toCompanyProfile(partner: Partner, reviews: CooperationReview[] 
       ? `已收录 ${verifiedReviews.length} 条已验证合作反馈，可用于参考履约、沟通、转化与数据透明度表现。`
       : (publicCases || '暂无已验证合作反馈，建议合作前补充合同、结算、案例和品牌方复盘材料。'),
     userScore: score,
-    sourceLabel: firstNonEmpty(partner.dataSource, '公开资料'),
+    sourceLabel: firstNonEmpty(getPublicDataSourceLabel(partner.dataSource), '公开资料'),
   };
 }
 

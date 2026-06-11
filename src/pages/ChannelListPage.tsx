@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Search, SlidersHorizontal, X, MapPin, ChevronRight, Shield, CheckCircle, AlertTriangle, Loader2, AlertCircle, Database } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
+import { getPublicDataSourceLabel } from '../lib/displaySources';
 import type { Partner } from '../types';
 
 const ENTITY_TYPE_OPTIONS = [
@@ -66,6 +67,8 @@ function PartnerCard({ partner, verifiedReviewCount, onNavigate }: {
   verifiedReviewCount: number;
   onNavigate: (page: string, id?: string) => void;
 }) {
+  const dataSource = getPublicDataSourceLabel(partner.dataSource);
+
   return (
     <div
       className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
@@ -156,9 +159,9 @@ function PartnerCard({ partner, verifiedReviewCount, onNavigate }: {
       </div>
 
       {/* Data source */}
-      {partner.dataSource && (
+      {dataSource && (
         <div className="mt-2 text-[10px] text-gray-400">
-          数据来源：{partner.dataSource} · {partner.updatedAt}
+          数据来源：{dataSource} · {partner.updatedAt}
         </div>
       )}
     </div>
