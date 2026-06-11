@@ -19,14 +19,16 @@ import {
   fetchAdminPartners,
   fetchCooperationReviews,
   fetchCreatorProfiles,
+  fetchDueDiligenceRequests,
   isSupabaseConfigured,
   upsertAdminPartners,
   upsertCooperationReviews,
   upsertCreatorProfiles,
+  upsertDueDiligenceRequests,
 } from '../lib/database';
 import type { Partner, CooperationReview } from '../types';
 
-type AdminTab = 'overview' | 'partners' | 'creatorProfiles' | 'reviews';
+type AdminTab = 'overview' | 'partners' | 'creatorProfiles' | 'reviews' | 'dueDiligence';
 type Visibility = 'public' | 'internal';
 type AdminPartner = Partner & {
   adminVisibility?: Visibility;
@@ -102,9 +104,27 @@ type CreatorProfile = Record<string, unknown> & {
   caseFileMeta?: Array<{ name?: string; path?: string; size?: number; type?: string }>;
 };
 
+type DueDiligenceRequest = Record<string, unknown> & {
+  id: string;
+  brand_name?: string;
+  contact?: string;
+  target_partner_name?: string;
+  target_partner_id?: string;
+  product_category?: string;
+  planned_cooperation_model?: string;
+  budget_range?: string;
+  main_concerns?: string;
+  expected_report_type?: string;
+  reportType?: string;
+  reportPrice?: string;
+  status?: string;
+  submittedAt?: string;
+};
+
 const PARTNER_STORAGE_KEY = 'channellens_admin_partners';
 const CREATOR_STORAGE_KEY = 'channellens_creator_profiles';
 const REVIEW_STORAGE_KEY = 'channellens_reviews';
+const DUE_DILIGENCE_STORAGE_KEY = 'dd_requests';
 
 const verificationOptions = ['未核验', '部分核验', '已核验'];
 const visibilityOptions: Visibility[] = ['public', 'internal'];
@@ -123,6 +143,12 @@ const roleLabels: Record<string, string> = {
   mcn: 'MCN/机构',
   brand: '品牌方',
   service: '合作服务商',
+};
+
+const dueDiligenceTypeLabels: Record<string, string> = {
+  basic: '基础版 ¥99',
+  standard: '标准版 ¥399',
+  deep: '深度版 ¥999',
 };
 
 function normalizeVerificationStatus(value: string) {
@@ -407,6 +433,7 @@ export default function AdminPage() {
   const [editablePartners, setEditablePartners] = useState<AdminPartner[]>([]);
   const [creatorProfiles, setCreatorProfiles] = useState<CreatorProfile[]>([]);
   const [localReviews, setLocalReviews] = useState<LocalReview[]>([]);
+  const [dueDiligenceRequests, setDueDiligenceRequests] = useState<DueDiligenceRequest[]>([]);
   const [editingPartner, setEditingPartner] = useState<AdminPartner | null>(null);
   const [editingCreatorIndex, setEditingCreatorIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
@@ -453,27 +480,32 @@ export default function AdminPage() {
     async function loadSubmissions() {
       const localProfiles = parseStoredArray<CreatorProfile>(CREATOR_STORAGE_KEY);
       const localFeedback = parseStoredArray<LocalReview>(REVIEW_STORAGE_KEY);
+      const localDueDiligenceRequests = parseStoredArray<DueDiligenceRequest>(DUE_DILIGENCE_STORAGE_KEY);
 
       if (!isSupabaseConfigured) {
         setCreatorProfiles(localProfiles);
         setLocalReviews(localFeedback);
+        setDueDiligenceRequests(localDueDiligenceRequests);
         return;
       }
 
       setRemoteLoading(true);
       try {
-        const [remoteProfiles, remoteFeedback] = await Promise.all([
+        const [remoteProfiles, remoteFeedback, remoteDueDiligenceRequests] = await Promise.all([
           fetchCreatorProfiles<CreatorProfile>(),
           fetchCooperationReviews<LocalReview>(),
+          fetchDueDiligenceRequests<DueDiligenceRequest>(),
         ]);
 
         if (cancelled) return;
         setCreatorProfiles(mergeById(remoteProfiles as Record<string, unknown>[], localProfiles as Record<string, unknown>[]) as CreatorProfile[]);
         setLocalReviews(mergeById(remoteFeedback, localFeedback));
+        setDueDiligenceRequests(mergeById(remoteDueDiligenceRequests, localDueDiligenceRequests));
       } catch {
         if (cancelled) return;
         setCreatorProfiles(localProfiles);
         setLocalReviews(localFeedback);
+        setDueDiligenceRequests(localDueDiligenceRequests);
         setNotice('云端数据读取失败，当前显示本机缓存数据。');
       } finally {
         if (!cancelled) setRemoteLoading(false);
@@ -500,13 +532,14 @@ export default function AdminPage() {
 
   const stats = useMemo(() => {
     const pendingCreators = creatorProfiles.filter((profile) => (profile.status ?? 'pending') === 'pending').length;
+    const pendingDueDiligence = dueDiligenceRequests.filter((request) => (request.status ?? 'pending') === 'pending').length;
     return [
       { label: '合作方档案', value: editablePartners.length, sub: '可编辑核验状态、标签和可见性', color: 'text-blue-600' },
       { label: '合作商入驻申请', value: creatorProfiles.length, sub: `${pendingCreators} 条待审核`, color: 'text-emerald-600' },
       { label: '合作反馈', value: allReviews.length, sub: '可审核证据与反馈状态', color: 'text-amber-600' },
-      { label: '含风险标签', value: editablePartners.filter((p) => p.riskTags.length > 0).length, sub: '建议优先复核', color: 'text-red-600' },
+      { label: '尽调申请', value: dueDiligenceRequests.length, sub: `${pendingDueDiligence} 条待跟进`, color: 'text-purple-600' },
     ];
-  }, [allReviews.length, creatorProfiles, editablePartners]);
+  }, [allReviews.length, creatorProfiles, dueDiligenceRequests, editablePartners.length]);
 
   function savePartners(nextPartners: AdminPartner[]) {
     setEditablePartners(nextPartners);
@@ -539,6 +572,28 @@ export default function AdminPage() {
       });
     }
     setNotice(isSupabaseConfigured ? '已保存合作反馈审核结果，并同步到云端数据库。' : '已保存合作反馈审核结果。');
+  }
+
+
+  function saveDueDiligenceRequests(nextRequests: DueDiligenceRequest[]) {
+    setDueDiligenceRequests(nextRequests);
+    window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextRequests));
+    if (isSupabaseConfigured) {
+      upsertDueDiligenceRequests(nextRequests as Record<string, unknown>[]).catch(() => {
+        setNotice('????????????????????????');
+      });
+    }
+    setNotice(isSupabaseConfigured ? '????????????????????' : '??????????');
+  }
+
+  function setDueDiligenceStatus(requestId: string, status: string) {
+    saveDueDiligenceRequests(
+      dueDiligenceRequests.map((request) =>
+        request.id === requestId
+          ? { ...request, status, reviewedAt: new Date().toISOString() }
+          : request
+      )
+    );
   }
 
   function setReviewEvidenceStatus(reviewId: string, evidenceStatus: string, reviewStatus: string, defaultNote: string) {
@@ -746,6 +801,7 @@ export default function AdminPage() {
             { key: 'partners', label: `合作方档案 (${editablePartners.length})` },
             { key: 'creatorProfiles', label: `入驻申请 (${creatorProfiles.length})` },
             { key: 'reviews', label: `合作反馈 (${allReviews.length})` },
+            { key: 'dueDiligence', label: `尽调申请 (${dueDiligenceRequests.length})` },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -1091,6 +1147,61 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'dueDiligence' && (
+          <div className="space-y-3">
+            {dueDiligenceRequests.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center text-sm text-gray-400">暂无尽调申请</div>
+            ) : (
+              dueDiligenceRequests.map((request) => {
+                const status = String(request.status ?? 'pending');
+                const statusMeta = statusLabels[status] ?? statusLabels.pending;
+                const reportType = String(request.expected_report_type ?? request.reportType ?? 'standard');
+                const reportLabel = dueDiligenceTypeLabels[reportType] ?? String(request.reportPrice ?? reportType);
+
+                return (
+                  <div key={request.id} className="bg-white border border-gray-200 rounded-xl p-5">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <span className="text-xs font-mono text-gray-400">{request.id}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded border ${statusMeta.color}`}>{statusMeta.label}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded border bg-purple-50 text-purple-700 border-purple-100">{reportLabel}</span>
+                        </div>
+                        <div className="text-sm font-bold text-gray-900">{request.brand_name || '未填写申请方'}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          联系方式：{request.contact || '-'} · 提交时间：{request.submittedAt || '-'}
+                        </div>
+                        <div className="mt-3 grid sm:grid-cols-2 gap-2 text-xs text-gray-600">
+                          <div className="bg-gray-50 rounded-lg px-3 py-2">尽调对象：{request.target_partner_name || '-'}</div>
+                          <div className="bg-gray-50 rounded-lg px-3 py-2">计划合作：{request.planned_cooperation_model || '-'}</div>
+                          <div className="bg-gray-50 rounded-lg px-3 py-2">类目：{request.product_category || '-'}</div>
+                          <div className="bg-gray-50 rounded-lg px-3 py-2">预算：{request.budget_range || '-'}</div>
+                        </div>
+                        {request.main_concerns && (
+                          <p className="text-xs text-gray-600 leading-relaxed mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                            关注点：{request.main_concerns}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap lg:flex-col gap-1.5 shrink-0">
+                        <button onClick={() => setDueDiligenceStatus(request.id, 'needs_info')} className="text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2.5 py-1.5 rounded-lg hover:bg-blue-100">
+                          跟进中
+                        </button>
+                        <button onClick={() => setDueDiligenceStatus(request.id, 'verified')} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1.5 rounded-lg hover:bg-emerald-100">
+                          已完成
+                        </button>
+                        <button onClick={() => setDueDiligenceStatus(request.id, 'rejected')} className="text-xs bg-red-50 text-red-600 border border-red-100 px-2.5 py-1.5 rounded-lg hover:bg-red-100">
+                          关闭/驳回
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         )}

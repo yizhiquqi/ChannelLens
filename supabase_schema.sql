@@ -34,6 +34,15 @@ create table if not exists public.cooperation_feedback (
 alter table public.cooperation_feedback add column if not exists user_id uuid references auth.users(id) on delete set null;
 alter table public.cooperation_feedback add column if not exists user_email text;
 
+create table if not exists public.due_diligence_requests (
+  id text primary key,
+  status text not null default 'pending',
+  report_type text not null default 'standard',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.admin_partners (
   id text primary key,
   visibility text not null default 'internal' check (visibility in ('public', 'internal')),
@@ -78,6 +87,7 @@ $$;
 alter table public.admin_users enable row level security;
 alter table public.partner_profiles enable row level security;
 alter table public.cooperation_feedback enable row level security;
+alter table public.due_diligence_requests enable row level security;
 alter table public.admin_partners enable row level security;
 alter table public.partner_visibility enable row level security;
 alter table public.user_profiles enable row level security;
@@ -173,6 +183,28 @@ using (public.is_admin())
 with check (public.is_admin());
 
 drop policy if exists "public insert cooperation feedback" on public.cooperation_feedback;
+
+drop policy if exists "public insert due diligence requests" on public.due_diligence_requests;
+create policy "public insert due diligence requests"
+on public.due_diligence_requests
+for insert
+to anon, authenticated
+with check (true);
+
+drop policy if exists "admins read due diligence requests" on public.due_diligence_requests;
+create policy "admins read due diligence requests"
+on public.due_diligence_requests
+for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "admins update due diligence requests" on public.due_diligence_requests;
+create policy "admins update due diligence requests"
+on public.due_diligence_requests
+for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
 
 drop policy if exists "public read public admin partners" on public.admin_partners;
 create policy "public read public admin partners"

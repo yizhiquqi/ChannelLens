@@ -542,9 +542,9 @@ function DueDiligenceCTA({ partner, onNavigate }: { partner: Partner; onNavigate
       </p>
       <div className="grid sm:grid-cols-3 gap-3 mb-5">
         {[
-          { name: '基础版', desc: '公开资料、主体信息、公开案例、初步风险线索' },
-          { name: '标准版', desc: '增加关系图谱、品牌匿名反馈、风险标签和合作建议' },
-          { name: '深度版', desc: '增加人工核验、访谈反馈、合同条款建议和试单方案' },
+          { name: '基础版 ¥99', desc: '公开资料、主体信息、公开案例、初步风险线索' },
+          { name: '标准版 ¥399', desc: '增加关系图谱、匿名反馈、风险标签和合作建议' },
+          { name: '深度版 ¥999', desc: '增加人工核验、访谈反馈、合同条款建议和试单方案' },
         ].map((item) => (
           <div key={item.name} className="bg-white/10 rounded-xl p-3">
             <div className="text-xs font-bold text-white mb-1">{item.name}</div>

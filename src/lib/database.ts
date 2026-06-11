@@ -314,6 +314,62 @@ export async function upsertCooperationReviews(reviews: JsonRecord[]) {
   if (error) throw error;
 }
 
+export async function insertDueDiligenceRequest(payload: JsonRecord) {
+  const id = withId(payload, 'DD');
+  const nextPayload: JsonRecord = { ...payload, id };
+
+  if (!supabase) {
+    return { ...nextPayload, storage: 'local' };
+  }
+
+  const { error } = await supabase.from('due_diligence_requests').insert({
+    id,
+    status: String(nextPayload.status ?? 'pending'),
+    report_type: String(nextPayload.expected_report_type ?? nextPayload.reportType ?? 'standard'),
+    payload: nextPayload,
+  });
+
+  if (error) throw error;
+  return { ...nextPayload, storage: 'supabase' };
+}
+
+export async function fetchDueDiligenceRequests<T extends JsonRecord>() {
+  if (!supabase) return [] as T[];
+
+  const { data, error } = await supabase
+    .from('due_diligence_requests')
+    .select('id,status,report_type,payload,created_at,updated_at')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    ...(row.payload as T),
+    id: row.id,
+    status: row.status,
+    reportType: row.report_type,
+    submittedAt: (row.payload as JsonRecord)?.submittedAt ?? row.created_at,
+  })) as T[];
+}
+
+export async function upsertDueDiligenceRequests(requests: JsonRecord[]) {
+  if (!supabase) return;
+
+  const rows = requests.map((request) => {
+    const id = withId(request, 'DD');
+    return {
+      id,
+      status: String(request.status ?? 'pending'),
+      report_type: String(request.expected_report_type ?? request.reportType ?? 'standard'),
+      payload: { ...request, id },
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  const { error } = await supabase.from('due_diligence_requests').upsert(rows);
+  if (error) throw error;
+}
+
 export async function fetchUserProfile<T extends JsonRecord>(userId: string) {
   if (!supabase) return null;
 
