@@ -14,10 +14,19 @@ import DataCollectorPage from './pages/DataCollectorPage';
 import CreatorOnboardingPage from './pages/CreatorOnboardingPage';
 import LoginPage from './pages/LoginPage';
 import AccountPage from './pages/AccountPage';
+import CompanyDetailPage from './pages/CompanyDetailPage';
 
-type Page = 'home' | 'list' | 'detail' | 'submit' | 'due-diligence' | 'admin' | 'data-collector' | 'creator-onboarding' | 'login' | 'account';
+type Page = 'home' | 'list' | 'detail' | 'submit' | 'due-diligence' | 'admin' | 'data-collector' | 'creator-onboarding' | 'login' | 'account' | 'company';
+
+function getCompanySlugFromPath() {
+  const match = window.location.pathname.match(/^\/company\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
 
 function getInitialPage(): Page {
+  if (getCompanySlugFromPath()) return 'company';
+  if (window.location.pathname === '/partners') return 'list';
+  if (window.location.pathname === '/reviews') return 'submit';
   if (window.location.pathname === '/admin') return 'admin';
   if (window.location.pathname === '/creator-onboarding') return 'creator-onboarding';
   if (window.location.pathname === '/login') return 'login';
@@ -28,6 +37,7 @@ function getInitialPage(): Page {
 export default function App() {
   const [page, setPage] = useState<Page>(getInitialPage);
   const [detailId, setDetailId] = useState<string>('');
+  const [companySlug, setCompanySlug] = useState<string>(getCompanySlugFromPath);
   const [adminAuthed, setAdminAuthed] = useState(() => hasAdminSession());
   const [session, setSession] = useState<Session | null>(null);
 
@@ -46,10 +56,21 @@ export default function App() {
     if (target === 'detail' && id) {
       setDetailId(id);
     }
+    if (target === 'company' && id) {
+      setCompanySlug(id);
+    }
     setPage(target as Page);
-    if (target === 'data-collector' || target === 'creator-onboarding' || target === 'admin' || target === 'login' || target === 'account') {
+    if (target === 'company' && id) {
+      window.history.pushState({}, '', `/company/${id}`);
+    } else if (target === 'list') {
+      window.history.pushState({}, '', '/partners');
+    } else if (target === 'submit') {
+      window.history.pushState({}, '', '/reviews');
+    } else if (target === 'home') {
+      window.history.pushState({}, '', '/');
+    } else if (target === 'data-collector' || target === 'creator-onboarding' || target === 'admin' || target === 'login' || target === 'account') {
       window.history.pushState({}, '', `/${target}`);
-    } else if (['/data-collector', '/creator-onboarding', '/admin', '/login', '/account'].includes(window.location.pathname)) {
+    } else if (['/data-collector', '/creator-onboarding', '/admin', '/login', '/account', '/partners', '/reviews'].includes(window.location.pathname) || window.location.pathname.startsWith('/company/')) {
       window.history.pushState({}, '', '/');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -69,6 +90,7 @@ export default function App() {
         {page === 'home' && <HomePage onNavigate={handleNavigate} />}
         {page === 'list' && <ChannelListPage onNavigate={handleNavigate} />}
         {page === 'detail' && <ChannelDetailPage channelId={detailId} onNavigate={handleNavigate} />}
+        {page === 'company' && <CompanyDetailPage slug={companySlug} onNavigate={handleNavigate} />}
         {page === 'submit' && (
           isSupabaseConfigured && !session ? (
             <LoginPage onNavigate={handleNavigate} onLoggedIn={() => handleNavigate('submit')} redirectLabel="登录后提交合作反馈" />
