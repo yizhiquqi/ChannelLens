@@ -226,6 +226,24 @@ function IdentityModule({ partner }: { partner: Partner }) {
             <dd className="font-medium text-gray-800">{partner.legalEntity}</dd>
           </div>
         )}
+        {partner.formerName && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">曾用名</dt>
+            <dd className="font-medium text-gray-800">{partner.formerName}</dd>
+          </div>
+        )}
+        {partner.companyType && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">企业类型</dt>
+            <dd className="font-medium text-gray-800">{partner.companyType}</dd>
+          </div>
+        )}
+        {partner.industry && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">所属行业</dt>
+            <dd className="font-medium text-gray-800">{partner.industry}</dd>
+          </div>
+        )}
         {partner.city && (
           <div>
             <dt className="text-xs text-gray-400 mb-0.5">所在城市</dt>
@@ -250,10 +268,70 @@ function IdentityModule({ partner }: { partner: Partner }) {
             <dd className="font-medium text-gray-800">{partner.legalRepresentative}</dd>
           </div>
         )}
+        {partner.registrationAuthority && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">登记机关</dt>
+            <dd className="font-medium text-gray-800">{partner.registrationAuthority}</dd>
+          </div>
+        )}
         {partner.businessStatus && (
           <div>
             <dt className="text-xs text-gray-400 mb-0.5">工商状态</dt>
             <dd className="font-medium text-gray-800">{partner.businessStatus}</dd>
+          </div>
+        )}
+        {partner.approvalDate && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">核准日期</dt>
+            <dd className="font-medium text-gray-800">{partner.approvalDate}</dd>
+          </div>
+        )}
+        {partner.insuredCount && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">参保人数</dt>
+            <dd className="font-medium text-gray-800">{partner.insuredCount}</dd>
+          </div>
+        )}
+        {partner.staffSize && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">人员规模</dt>
+            <dd className="font-medium text-gray-800">{partner.staffSize}</dd>
+          </div>
+        )}
+        {partner.unifiedSocialCreditCode && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">统一社会信用代码</dt>
+            <dd className="font-medium text-gray-800">{partner.unifiedSocialCreditCode}</dd>
+          </div>
+        )}
+        {partner.taxpayerId && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">纳税人识别号</dt>
+            <dd className="font-medium text-gray-800">{partner.taxpayerId}</dd>
+          </div>
+        )}
+        {partner.registrationNumber && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">注册号</dt>
+            <dd className="font-medium text-gray-800">{partner.registrationNumber}</dd>
+          </div>
+        )}
+        {partner.organizationCode && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">组织机构代码</dt>
+            <dd className="font-medium text-gray-800">{partner.organizationCode}</dd>
+          </div>
+        )}
+        {partner.address && (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-gray-400 mb-0.5">地址</dt>
+            <dd className="font-medium text-gray-800">{partner.address}</dd>
+          </div>
+        )}
+        {partner.businessScope && (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-gray-400 mb-0.5">经营范围</dt>
+            <dd className="font-medium text-gray-800 leading-relaxed">{partner.businessScope}</dd>
           </div>
         )}
         {partner.coverageArea.length > 0 && (

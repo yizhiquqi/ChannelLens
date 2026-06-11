@@ -63,6 +63,23 @@ interface PartnerGeneratedRow {
   entity_type: string;
   partner_type: string;
   legal_entity: string;
+  former_name: string;
+  company_type: string;
+  industry: string;
+  registered_capital: string;
+  founded_date: string;
+  legal_representative: string;
+  business_status: string;
+  registration_authority: string;
+  approval_date: string;
+  insured_count: string;
+  staff_size: string;
+  unified_social_credit_code: string;
+  taxpayer_id: string;
+  registration_number: string;
+  organization_code: string;
+  address: string;
+  business_scope: string;
   role_title: string;
   city: string;
   coverage_area: string;
@@ -147,9 +164,24 @@ interface CollectorSource {
 interface McnCollectorDraft {
   name: string;
   company: string;
+  formerName: string;
+  companyType: string;
+  industry: string;
   website: string;
   foundedDate: string;
   registeredCapital: string;
+  legalRepresentative: string;
+  businessStatus: string;
+  registrationAuthority: string;
+  approvalDate: string;
+  insuredCount: string;
+  staffSize: string;
+  unifiedSocialCreditCode: string;
+  taxpayerId: string;
+  registrationNumber: string;
+  organizationCode: string;
+  address: string;
+  businessScope: string;
   douyinAccount: string;
   xiaohongshuAccount: string;
   wechatOfficialAccount: string;
@@ -168,6 +200,23 @@ const PARTNER_HEADERS: (keyof PartnerGeneratedRow)[] = [
   'entity_type',
   'partner_type',
   'legal_entity',
+  'former_name',
+  'company_type',
+  'industry',
+  'registered_capital',
+  'founded_date',
+  'legal_representative',
+  'business_status',
+  'registration_authority',
+  'approval_date',
+  'insured_count',
+  'staff_size',
+  'unified_social_credit_code',
+  'taxpayer_id',
+  'registration_number',
+  'organization_code',
+  'address',
+  'business_scope',
   'role_title',
   'city',
   'coverage_area',
@@ -273,6 +322,16 @@ function chooseValue(...values: unknown[]): string {
   return '';
 }
 
+function extractLabeledValue(text: string, labels: string[]): string {
+  for (const label of labels) {
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = text.match(new RegExp(`${escapedLabel}[：:]\\s*([^\\n]+)`));
+    const value = normalize(match?.[1]).replace(/^待补充$/, '');
+    if (value) return value;
+  }
+  return '';
+}
+
 function normalizeRawRow(row: RawDataInputRow, index: number): RawDataRow {
   const rawText = chooseValue(row.source_text, row.raw_text, row.public_cases_text);
   const notes = chooseValue(row.collector_note, row.raw_notes, row.risk_clues, row.next_action);
@@ -301,9 +360,24 @@ function collectorDraftToRawRow(draft: McnCollectorDraft): RawDataRow {
   const primarySource = draft.website || draft.sources?.[0]?.url || '';
   const sourceText = [
     `公司主体：${draft.company || '待补充'}`,
+    `曾用名：${draft.formerName || '待补充'}`,
+    `企业类型：${draft.companyType || '待补充'}`,
+    `所属行业：${draft.industry || '待补充'}`,
     `官网：${draft.website || '待补充'}`,
     `成立时间：${draft.foundedDate || '待补充'}`,
     `注册资本：${draft.registeredCapital || '待补充'}`,
+    `法定代表人：${draft.legalRepresentative || '待补充'}`,
+    `经营状态：${draft.businessStatus || '待补充'}`,
+    `登记机关：${draft.registrationAuthority || '待补充'}`,
+    `核准日期：${draft.approvalDate || '待补充'}`,
+    `参保人数：${draft.insuredCount || '待补充'}`,
+    `人员规模：${draft.staffSize || '待补充'}`,
+    `统一社会信用代码：${draft.unifiedSocialCreditCode || '待补充'}`,
+    `纳税人识别号：${draft.taxpayerId || '待补充'}`,
+    `注册号：${draft.registrationNumber || '待补充'}`,
+    `组织机构代码：${draft.organizationCode || '待补充'}`,
+    `地址：${draft.address || '待补充'}`,
+    `经营范围：${draft.businessScope || '待补充'}`,
     `抖音账号：${draft.douyinAccount || '待补充'}`,
     `小红书账号：${draft.xiaohongshuAccount || '待补充'}`,
     `微信公众号：${draft.wechatOfficialAccount || '待补充'}`,
@@ -366,6 +440,23 @@ function makePartner(overrides: Partial<PartnerGeneratedRow>): PartnerGeneratedR
     entity_type: '',
     partner_type: '',
     legal_entity: '',
+    former_name: '',
+    company_type: '',
+    industry: '',
+    registered_capital: '',
+    founded_date: '',
+    legal_representative: '',
+    business_status: '',
+    registration_authority: '',
+    approval_date: '',
+    insured_count: '',
+    staff_size: '',
+    unified_social_credit_code: '',
+    taxpayer_id: '',
+    registration_number: '',
+    organization_code: '',
+    address: '',
+    business_scope: '',
     role_title: '',
     city: '',
     coverage_area: '',
@@ -464,6 +555,25 @@ function generateData(rawRows: RawDataRow[]): GeneratedData {
     const riskTags = chooseValue(row.risk_clues, '信息待补充;案例未完全核验');
     const companyName = normalize(row.related_mcn_name);
     const legalEntity = normalize(row.related_company_name);
+    const businessFields = {
+      former_name: extractLabeledValue(text, ['曾用名']),
+      company_type: extractLabeledValue(text, ['企业类型', '公司类型']),
+      industry: extractLabeledValue(text, ['所属行业', '行业']),
+      registered_capital: extractLabeledValue(text, ['注册资本']),
+      founded_date: extractLabeledValue(text, ['成立时间', '成立日期']),
+      legal_representative: extractLabeledValue(text, ['法定代表人', '法人']),
+      business_status: extractLabeledValue(text, ['经营状态']),
+      registration_authority: extractLabeledValue(text, ['登记机关']),
+      approval_date: extractLabeledValue(text, ['核准日期']),
+      insured_count: extractLabeledValue(text, ['参保人数']),
+      staff_size: extractLabeledValue(text, ['人员规模']),
+      unified_social_credit_code: extractLabeledValue(text, ['统一社会信用代码']),
+      taxpayer_id: extractLabeledValue(text, ['纳税人识别号']),
+      registration_number: extractLabeledValue(text, ['注册号']),
+      organization_code: extractLabeledValue(text, ['组织机构代码']),
+      address: extractLabeledValue(text, ['地址', '注册地址']),
+      business_scope: extractLabeledValue(text, ['经营范围']),
+    };
     let companyPartner: PartnerGeneratedRow | undefined;
 
     if (companyName || legalEntity) {
@@ -485,6 +595,7 @@ function generateData(rawRows: RawDataRow[]): GeneratedData {
           entity_type: 'company',
           partner_type: chooseValue(row.suggested_partner_type, getCompanyPartnerType(text)),
           legal_entity: legalEntity || '未知',
+          ...businessFields,
           platforms,
           categories,
           public_cases: text || '',
@@ -850,7 +961,7 @@ export default function DataCollectorPage() {
               <textarea
                 value={collectorJson}
                 onChange={(event) => setCollectorJson(event.target.value)}
-                placeholder={`{\n  "name": "",\n  "company": "",\n  "website": "",\n  "foundedDate": "",\n  "registeredCapital": "",\n  "douyinAccount": "",\n  "xiaohongshuAccount": "",\n  "wechatOfficialAccount": "",\n  "publicContacts": [],\n  "news": []\n}`}
+                placeholder={`{\n  "name": "",\n  "company": "",\n  "formerName": "",\n  "companyType": "",\n  "industry": "",\n  "website": "",\n  "foundedDate": "",\n  "registeredCapital": "",\n  "legalRepresentative": "",\n  "businessStatus": "",\n  "registrationAuthority": "",\n  "approvalDate": "",\n  "insuredCount": "",\n  "staffSize": "",\n  "unifiedSocialCreditCode": "",\n  "taxpayerId": "",\n  "registrationNumber": "",\n  "organizationCode": "",\n  "address": "",\n  "businessScope": "",\n  "douyinAccount": "",\n  "xiaohongshuAccount": "",\n  "wechatOfficialAccount": "",\n  "publicContacts": [],\n  "news": []\n}`}
                 className="w-full min-h-[260px] font-mono text-xs border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
               />
               <div className="flex flex-wrap gap-2 mt-3">

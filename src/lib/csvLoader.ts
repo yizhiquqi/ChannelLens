@@ -26,10 +26,23 @@ interface PartnerRow {
   entity_type: string;
   partner_type: string;
   legal_entity: string;
+  former_name?: string;
+  company_type?: string;
+  industry?: string;
   registered_capital: string;
   founded_date: string;
   legal_representative: string;
   business_status: string;
+  registration_authority?: string;
+  approval_date?: string;
+  insured_count?: string;
+  staff_size?: string;
+  unified_social_credit_code?: string;
+  taxpayer_id?: string;
+  registration_number?: string;
+  organization_code?: string;
+  address?: string;
+  business_scope?: string;
   business_info_source: string;
   city: string;
   coverage_area: string;
@@ -139,10 +152,23 @@ function parsePartnerRow(row: PartnerRow): Partner {
     entityType: row.entity_type as EntityType,
     displayName: row.display_name,
     legalEntity: row.legal_entity || undefined,
+    formerName: row.former_name || undefined,
+    companyType: row.company_type || undefined,
+    industry: row.industry || undefined,
     registeredCapital: row.registered_capital || undefined,
     foundedDate: row.founded_date || undefined,
     legalRepresentative: row.legal_representative || undefined,
     businessStatus: row.business_status || undefined,
+    registrationAuthority: row.registration_authority || undefined,
+    approvalDate: row.approval_date || undefined,
+    insuredCount: row.insured_count || undefined,
+    staffSize: row.staff_size || undefined,
+    unifiedSocialCreditCode: row.unified_social_credit_code || undefined,
+    taxpayerId: row.taxpayer_id || undefined,
+    registrationNumber: row.registration_number || undefined,
+    organizationCode: row.organization_code || undefined,
+    address: row.address || undefined,
+    businessScope: row.business_scope || undefined,
     businessInfoSource: row.entity_type === 'company' ? '企信通' : (row.business_info_source || undefined),
     city: row.city,
     coverageArea: splitField(row.coverage_area),
