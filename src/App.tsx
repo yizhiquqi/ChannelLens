@@ -68,6 +68,8 @@ export default function App() {
       window.history.pushState({}, '', '/reviews');
     } else if (target === 'home') {
       window.history.pushState({}, '', '/');
+    } else if (target === 'admin' && id) {
+      window.history.pushState({}, '', `/admin?partner=${encodeURIComponent(id)}`);
     } else if (target === 'data-collector' || target === 'creator-onboarding' || target === 'admin' || target === 'login' || target === 'account') {
       window.history.pushState({}, '', `/${target}`);
     } else if (['/data-collector', '/creator-onboarding', '/admin', '/login', '/account', '/partners', '/reviews'].includes(window.location.pathname) || window.location.pathname.startsWith('/company/')) {

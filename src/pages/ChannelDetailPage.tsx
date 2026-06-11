@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   ChevronLeft, AlertTriangle, CheckCircle, Users, Clock, ThumbsUp, ThumbsDown,
   Shield, Building2, User2, Users2, Loader2, AlertCircle, FileText, GitFork,
-  BarChart3, Info, MapPin, ExternalLink,
+  BarChart3, Info, ExternalLink, Edit3,
 } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
 import { getBusinessInfoSourceLabel, getPublicDataSourceLabel } from '../lib/displaySources';
@@ -645,6 +645,13 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
                 )}
               </div>
               <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => onNavigate('admin', channelId)}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  <Edit3 size={13} />
+                  管理员编辑
+                </button>
                 <button
                   onClick={() => onNavigate('due-diligence')}
                   className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"

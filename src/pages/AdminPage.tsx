@@ -475,6 +475,16 @@ export default function AdminPage() {
   }, [partners]);
 
   useEffect(() => {
+    if (editablePartners.length === 0) return;
+    const partnerId = new URLSearchParams(window.location.search).get('partner');
+    if (!partnerId) return;
+    const target = editablePartners.find((partner) => partner.id === partnerId);
+    if (!target) return;
+    setActiveTab('partners');
+    setEditingPartner(target);
+  }, [editablePartners]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadSubmissions() {
@@ -1360,6 +1370,49 @@ export default function AdminPage() {
             <div className="p-6 space-y-5">
               <TextInput label="展示名称" value={editingPartner.displayName} onChange={(value) => setEditingPartner({ ...editingPartner, displayName: value })} />
               <TextInput label="主体/公司名称" value={editingPartner.legalEntity ?? ''} onChange={(value) => setEditingPartner({ ...editingPartner, legalEntity: value })} />
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-4">
+                <div>
+                  <div className="text-xs font-bold text-gray-900">A. 工商核心信息</div>
+                  <div className="text-xs text-gray-400 mt-1">前台仅展示这些核心工商字段，其余变量会保留在数据库但不公开展示。</div>
+                </div>
+                <TextInput
+                  label="企业类型"
+                  value={editingPartner.companyType ?? ''}
+                  onChange={(value) => setEditingPartner({ ...editingPartner, companyType: value })}
+                />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <TextInput
+                    label="注册资本"
+                    value={editingPartner.registeredCapital ?? ''}
+                    onChange={(value) => setEditingPartner({ ...editingPartner, registeredCapital: value })}
+                  />
+                  <TextInput
+                    label="成立日期"
+                    value={editingPartner.foundedDate ?? ''}
+                    onChange={(value) => setEditingPartner({ ...editingPartner, foundedDate: value })}
+                  />
+                  <TextInput
+                    label="核准日期"
+                    value={editingPartner.approvalDate ?? ''}
+                    onChange={(value) => setEditingPartner({ ...editingPartner, approvalDate: value })}
+                  />
+                  <TextInput
+                    label="工商信息来源"
+                    value={editingPartner.businessInfoSource ?? ''}
+                    onChange={(value) => setEditingPartner({ ...editingPartner, businessInfoSource: value })}
+                  />
+                </div>
+                <TextArea
+                  label="住址"
+                  value={editingPartner.address ?? ''}
+                  onChange={(value) => setEditingPartner({ ...editingPartner, address: value })}
+                />
+                <TextArea
+                  label="经营范围"
+                  value={editingPartner.businessScope ?? ''}
+                  onChange={(value) => setEditingPartner({ ...editingPartner, businessScope: value })}
+                />
+              </div>
               <TextInput
                 label="类型"
                 value={Array.isArray(editingPartner.partnerType) ? editingPartner.partnerType.join('、') : String(editingPartner.partnerType)}

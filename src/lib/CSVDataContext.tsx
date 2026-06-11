@@ -42,7 +42,8 @@ export function CSVDataProvider({ children }: { children: ReactNode }) {
             const publicAdminPartners = adminPartners.filter((partner) => partner.adminVisibility === 'public');
             const visibleCsvPartners = partners.filter((partner) => visibilityMap.get(partner.id) !== 'internal');
             const seen = new Set<string>();
-            const mergedPartners = [...publicAdminPartners, ...visibleCsvPartners].filter((partner) => {
+            const sourcePartners = publicAdminPartners.length > 0 ? publicAdminPartners : visibleCsvPartners;
+            const mergedPartners = sourcePartners.filter((partner) => {
               if (seen.has(partner.id)) return false;
               seen.add(partner.id);
               return true;
