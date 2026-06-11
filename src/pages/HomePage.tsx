@@ -1,10 +1,33 @@
+import { useEffect } from 'react';
 import { ArrowRight, FileSearch, GitFork, MessageSquare, ShieldAlert, BarChart3, CheckCircle, Clock } from 'lucide-react';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
 }
 
+const HOME_SEO_TITLE = '渠评｜电商品牌合作方信用查询与尽调平台';
+const HOME_SEO_DESCRIPTION = '渠评是电商品牌合作方信用查询与尽调平台，帮助品牌在合作达人、MCN、代运营和服务商前查看公开资料、合作反馈、风险标签与尽调信息。';
+
+function setMeta(selector: string, attribute: 'name' | 'property', key: string, content: string) {
+  let tag = document.querySelector(selector);
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute(attribute, key);
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content);
+}
+
 export default function HomePage({ onNavigate }: HomePageProps) {
+  useEffect(() => {
+    document.title = HOME_SEO_TITLE;
+    setMeta('meta[name="description"]', 'name', 'description', HOME_SEO_DESCRIPTION);
+    setMeta('meta[property="og:title"]', 'property', 'og:title', HOME_SEO_TITLE);
+    setMeta('meta[property="og:description"]', 'property', 'og:description', HOME_SEO_DESCRIPTION);
+    setMeta('meta[name="twitter:title"]', 'name', 'twitter:title', HOME_SEO_TITLE);
+    setMeta('meta[name="twitter:description"]', 'name', 'twitter:description', HOME_SEO_DESCRIPTION);
+  }, []);
+
   return (
     <div className="min-h-screen bg-white">
       {/* Hero */}
