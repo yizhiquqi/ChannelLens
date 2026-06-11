@@ -59,6 +59,15 @@ create table if not exists public.partner_visibility (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.raw_collections (
+  id text primary key,
+  query text not null default '',
+  status text not null default 'draft',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.user_profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -90,6 +99,7 @@ alter table public.cooperation_feedback enable row level security;
 alter table public.due_diligence_requests enable row level security;
 alter table public.admin_partners enable row level security;
 alter table public.partner_visibility enable row level security;
+alter table public.raw_collections enable row level security;
 alter table public.user_profiles enable row level security;
 
 drop policy if exists "admins read admin users" on public.admin_users;
@@ -249,6 +259,28 @@ with check (public.is_admin());
 drop policy if exists "admins update partner visibility" on public.partner_visibility;
 create policy "admins update partner visibility"
 on public.partner_visibility
+for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "admins read raw collections" on public.raw_collections;
+create policy "admins read raw collections"
+on public.raw_collections
+for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "admins insert raw collections" on public.raw_collections;
+create policy "admins insert raw collections"
+on public.raw_collections
+for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "admins update raw collections" on public.raw_collections;
+create policy "admins update raw collections"
+on public.raw_collections
 for update
 to authenticated
 using (public.is_admin())

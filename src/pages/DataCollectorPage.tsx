@@ -4,12 +4,16 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  ExternalLink,
   FileSpreadsheet,
   Loader2,
+  Plus,
+  Save,
   Search,
   ShieldAlert,
   Upload,
 } from 'lucide-react';
+import { insertRawCollection, isSupabaseConfigured } from '../lib/database';
 
 type ReviewAction = '未复核' | '已复核' | '需核验' | '不导出';
 
@@ -132,6 +136,30 @@ interface GeneratedData {
   metrics: MetricGeneratedRow[];
   logs: LogRow[];
   duplicateNames: string[];
+}
+
+interface CollectorSource {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+interface McnCollectorDraft {
+  name: string;
+  company: string;
+  website: string;
+  foundedDate: string;
+  registeredCapital: string;
+  douyinAccount: string;
+  xiaohongshuAccount: string;
+  wechatOfficialAccount: string;
+  publicContacts: string[];
+  news: CollectorSource[];
+  sources: CollectorSource[];
+  status: string;
+  searchProvider: string;
+  searchLinks: Array<{ label: string; url: string }>;
+  collectedAt: string;
 }
 
 const PARTNER_HEADERS: (keyof PartnerGeneratedRow)[] = [
@@ -266,6 +294,41 @@ function normalizeRawRow(row: RawDataInputRow, index: number): RawDataRow {
     suggested_platforms: chooseValue(row.suggested_platforms),
     suggested_categories: chooseValue(row.suggested_categories),
     risk_clues: chooseValue(row.risk_clues),
+  };
+}
+
+function collectorDraftToRawRow(draft: McnCollectorDraft): RawDataRow {
+  const primarySource = draft.website || draft.sources?.[0]?.url || '';
+  const sourceText = [
+    `公司主体：${draft.company || '待补充'}`,
+    `官网：${draft.website || '待补充'}`,
+    `成立时间：${draft.foundedDate || '待补充'}`,
+    `注册资本：${draft.registeredCapital || '待补充'}`,
+    `抖音账号：${draft.douyinAccount || '待补充'}`,
+    `小红书账号：${draft.xiaohongshuAccount || '待补充'}`,
+    `微信公众号：${draft.wechatOfficialAccount || '待补充'}`,
+    `公开联系方式：${draft.publicContacts?.join('；') || '待补充'}`,
+    `相关新闻：${draft.news?.map((item) => item.title).join('；') || '待补充'}`,
+  ].join('\n');
+
+  return {
+    raw_id: `AUTO_${Date.now()}`,
+    source_type: draft.searchProvider && draft.searchProvider !== 'none' ? `搜索API:${draft.searchProvider}` : '人工搜索入口',
+    source_url: primarySource,
+    source_title: `${draft.name} 公开资料采集草稿`,
+    source_text: sourceText,
+    screenshot_path: '',
+    related_mcn_name: draft.name,
+    related_company_name: draft.company,
+    raw_people_names: '',
+    collected_date: new Date().toISOString().slice(0, 10),
+    collector_note: `collector status=${draft.status}; sources=${draft.sources?.length ?? 0}`,
+    confidence_hint: draft.sources?.length > 0 ? 'medium' : 'low',
+    processed_status: '待人工复核',
+    suggested_partner_type: 'MCN机构',
+    suggested_platforms: [draft.douyinAccount ? '抖音' : '', draft.xiaohongshuAccount ? '小红书' : '', draft.wechatOfficialAccount ? '微信' : ''].filter(Boolean).join(';') || '未知',
+    suggested_categories: '未知',
+    risk_clues: '信息待补充;公开来源需复核',
   };
 }
 
@@ -584,9 +647,13 @@ export default function DataCollectorPage() {
   const [rawRows, setRawRows] = useState<RawDataRow[]>([]);
   const [generated, setGenerated] = useState<GeneratedData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [collecting, setCollecting] = useState(false);
   const [message, setMessage] = useState('');
   const [activeTab, setActiveTab] = useState<'raw' | 'partners' | 'relationships' | 'metrics' | 'logs'>('raw');
   const [query, setQuery] = useState('');
+  const [collectorName, setCollectorName] = useState('');
+  const [collectorJson, setCollectorJson] = useState('');
+  const [collectorDraft, setCollectorDraft] = useState<McnCollectorDraft | null>(null);
 
   const visiblePartners = useMemo(() => generated?.partners.filter((row) => row.human_review_status !== '不导出') ?? [], [generated]);
   const visibleRelationships = useMemo(() => generated?.relationships.filter((row) => row.visibility !== 'hidden') ?? [], [generated]);
@@ -652,6 +719,67 @@ export default function DataCollectorPage() {
     });
   }
 
+  async function handleCollectMcn() {
+    const name = normalize(collectorName);
+    if (!name) {
+      setMessage('请输入 MCN 名称。');
+      return;
+    }
+
+    setCollecting(true);
+    setMessage('');
+    try {
+      const response = await fetch(`/api/collect-mcn?name=${encodeURIComponent(name)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || '采集失败');
+      setCollectorDraft(payload);
+      setCollectorJson(JSON.stringify(payload, null, 2));
+      setMessage(payload.searchProvider === 'none'
+        ? '已生成采集草稿。当前未配置搜索 API key，请根据右侧搜索入口补充资料后保存。'
+        : `已生成 ${name} 的公开资料采集草稿。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '采集失败');
+    } finally {
+      setCollecting(false);
+    }
+  }
+
+  function parseCollectorJson() {
+    const parsed = JSON.parse(collectorJson) as McnCollectorDraft;
+    if (!parsed.name) throw new Error('JSON 里缺少 name 字段');
+    return parsed;
+  }
+
+  function addCollectorDraftToRawRows() {
+    try {
+      const parsed = parseCollectorJson();
+      const row = collectorDraftToRawRow(parsed);
+      setRawRows((current) => [row, ...current]);
+      setCollectorDraft(parsed);
+      setActiveTab('raw');
+      setMessage(`已把 ${parsed.name} 加入当前 raw 队列，可继续生成结构化数据。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'JSON 解析失败');
+    }
+  }
+
+  async function saveCollectorDraft() {
+    try {
+      const parsed = parseCollectorJson();
+      const saved = await insertRawCollection({
+        ...parsed,
+        query: parsed.name,
+        status: parsed.status || 'draft',
+      } as unknown as Record<string, unknown>);
+      setCollectorDraft(parsed);
+      setMessage(isSupabaseConfigured
+        ? `已保存 ${parsed.name} 到 Supabase raw_collections。`
+        : `已生成本地草稿 ${saved.id}。当前未配置 Supabase，线上不会持久保存。`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '保存失败');
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gray-50">
       <section className="bg-white border-b border-gray-200">
@@ -690,6 +818,93 @@ export default function DataCollectorPage() {
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5 mb-4">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">MCN 公开资料 Collector</h2>
+              <p className="text-xs text-gray-500 mt-1">输入 MCN 名称，生成公司主体、官网、账号、联系方式、新闻等 JSON 草稿；人工核验后可保存或加入 raw 队列。</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 lg:w-[520px]">
+              <input
+                value={collectorName}
+                onChange={(event) => setCollectorName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleCollectMcn();
+                }}
+                placeholder="例如：无忧传媒、谦寻、辛选、遥望科技"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleCollectMcn}
+                disabled={collecting}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {collecting ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                生成草稿
+              </button>
+            </div>
+          </div>
+
+          <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+            <div>
+              <textarea
+                value={collectorJson}
+                onChange={(event) => setCollectorJson(event.target.value)}
+                placeholder={`{\n  "name": "",\n  "company": "",\n  "website": "",\n  "foundedDate": "",\n  "registeredCapital": "",\n  "douyinAccount": "",\n  "xiaohongshuAccount": "",\n  "wechatOfficialAccount": "",\n  "publicContacts": [],\n  "news": []\n}`}
+                className="w-full min-h-[260px] font-mono text-xs border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
+              />
+              <div className="flex flex-wrap gap-2 mt-3">
+                <button
+                  onClick={addCollectorDraftToRawRows}
+                  disabled={!collectorJson}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-40"
+                >
+                  <Plus size={14} />
+                  加入 raw 队列
+                </button>
+                <button
+                  onClick={saveCollectorDraft}
+                  disabled={!collectorJson}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-40"
+                >
+                  <Save size={14} />
+                  保存到 raw_collections
+                </button>
+              </div>
+            </div>
+
+            <aside className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <h3 className="text-sm font-bold text-gray-900 mb-3">搜索入口 / 来源</h3>
+              {collectorDraft?.searchLinks?.length ? (
+                <div className="space-y-2 mb-4">
+                  {collectorDraft.searchLinks.map((link) => (
+                    <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="flex items-start justify-between gap-2 text-xs text-blue-700 hover:text-blue-800 bg-white border border-blue-100 rounded-md px-2.5 py-2">
+                      <span>{link.label}</span>
+                      <ExternalLink size={12} className="shrink-0 mt-0.5" />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 mb-4">生成草稿后这里会出现搜索入口。</p>
+              )}
+
+              <h3 className="text-sm font-bold text-gray-900 mb-2">已识别来源</h3>
+              {collectorDraft?.sources?.length ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {collectorDraft.sources.slice(0, 8).map((source) => (
+                    <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="block bg-white border border-gray-200 rounded-md p-2 hover:border-blue-200">
+                      <div className="text-xs font-semibold text-gray-800 line-clamp-1">{source.title}</div>
+                      <div className="text-[11px] text-gray-400 line-clamp-2 mt-1">{source.snippet}</div>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">当前没有自动识别来源；配置搜索 API key 后会自动补充。</p>
+              )}
+            </aside>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {[
             { label: '原始资料', value: rawRows.length },

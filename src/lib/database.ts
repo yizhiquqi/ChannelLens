@@ -370,6 +370,44 @@ export async function upsertDueDiligenceRequests(requests: JsonRecord[]) {
   if (error) throw error;
 }
 
+export async function insertRawCollection(payload: JsonRecord) {
+  const id = withId(payload, 'RAWCOL');
+  const nextPayload: JsonRecord = { ...payload, id };
+
+  if (!supabase) {
+    return { ...nextPayload, storage: 'local' };
+  }
+
+  const { error } = await supabase.from('raw_collections').insert({
+    id,
+    query: String(nextPayload.name ?? nextPayload.query ?? ''),
+    status: String(nextPayload.status ?? 'draft'),
+    payload: nextPayload,
+  });
+
+  if (error) throw error;
+  return { ...nextPayload, storage: 'supabase' };
+}
+
+export async function fetchRawCollections<T extends JsonRecord>() {
+  if (!supabase) return [] as T[];
+
+  const { data, error } = await supabase
+    .from('raw_collections')
+    .select('id,query,status,payload,created_at,updated_at')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    ...(row.payload as T),
+    id: row.id,
+    query: row.query,
+    status: row.status,
+    collectedAt: (row.payload as JsonRecord)?.collectedAt ?? row.created_at,
+  })) as T[];
+}
+
 export async function fetchUserProfile<T extends JsonRecord>(userId: string) {
   if (!supabase) return null;
 
