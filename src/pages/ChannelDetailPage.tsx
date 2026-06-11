@@ -220,40 +220,10 @@ function IdentityModule({ partner }: { partner: Partner }) {
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3 text-sm">
-        {partner.legalEntity && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">法律主体</dt>
-            <dd className="font-medium text-gray-800">{partner.legalEntity}</dd>
-          </div>
-        )}
-        {partner.formerName && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">曾用名</dt>
-            <dd className="font-medium text-gray-800">{partner.formerName}</dd>
-          </div>
-        )}
         {partner.companyType && (
           <div>
             <dt className="text-xs text-gray-400 mb-0.5">企业类型</dt>
             <dd className="font-medium text-gray-800">{partner.companyType}</dd>
-          </div>
-        )}
-        {partner.industry && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">所属行业</dt>
-            <dd className="font-medium text-gray-800">{partner.industry}</dd>
-          </div>
-        )}
-        {partner.city && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">所在城市</dt>
-            <dd className="font-medium text-gray-800 flex items-center gap-1"><MapPin size={12} />{partner.city}</dd>
-          </div>
-        )}
-        {partner.foundedDate && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">成立日期</dt>
-            <dd className="font-medium text-gray-800">{partner.foundedDate}</dd>
           </div>
         )}
         {partner.registeredCapital && (
@@ -262,22 +232,10 @@ function IdentityModule({ partner }: { partner: Partner }) {
             <dd className="font-medium text-gray-800">{partner.registeredCapital}</dd>
           </div>
         )}
-        {partner.legalRepresentative && (
+        {partner.foundedDate && (
           <div>
-            <dt className="text-xs text-gray-400 mb-0.5">法定代表人</dt>
-            <dd className="font-medium text-gray-800">{partner.legalRepresentative}</dd>
-          </div>
-        )}
-        {partner.registrationAuthority && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">登记机关</dt>
-            <dd className="font-medium text-gray-800">{partner.registrationAuthority}</dd>
-          </div>
-        )}
-        {partner.businessStatus && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">工商状态</dt>
-            <dd className="font-medium text-gray-800">{partner.businessStatus}</dd>
+            <dt className="text-xs text-gray-400 mb-0.5">成立日期</dt>
+            <dd className="font-medium text-gray-800">{partner.foundedDate}</dd>
           </div>
         )}
         {partner.approvalDate && (
@@ -286,45 +244,9 @@ function IdentityModule({ partner }: { partner: Partner }) {
             <dd className="font-medium text-gray-800">{partner.approvalDate}</dd>
           </div>
         )}
-        {partner.insuredCount && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">参保人数</dt>
-            <dd className="font-medium text-gray-800">{partner.insuredCount}</dd>
-          </div>
-        )}
-        {partner.staffSize && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">人员规模</dt>
-            <dd className="font-medium text-gray-800">{partner.staffSize}</dd>
-          </div>
-        )}
-        {partner.unifiedSocialCreditCode && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">统一社会信用代码</dt>
-            <dd className="font-medium text-gray-800">{partner.unifiedSocialCreditCode}</dd>
-          </div>
-        )}
-        {partner.taxpayerId && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">纳税人识别号</dt>
-            <dd className="font-medium text-gray-800">{partner.taxpayerId}</dd>
-          </div>
-        )}
-        {partner.registrationNumber && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">注册号</dt>
-            <dd className="font-medium text-gray-800">{partner.registrationNumber}</dd>
-          </div>
-        )}
-        {partner.organizationCode && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">组织机构代码</dt>
-            <dd className="font-medium text-gray-800">{partner.organizationCode}</dd>
-          </div>
-        )}
         {partner.address && (
           <div className="sm:col-span-2">
-            <dt className="text-xs text-gray-400 mb-0.5">地址</dt>
+            <dt className="text-xs text-gray-400 mb-0.5">住址</dt>
             <dd className="font-medium text-gray-800">{partner.address}</dd>
           </div>
         )}
@@ -332,24 +254,6 @@ function IdentityModule({ partner }: { partner: Partner }) {
           <div className="sm:col-span-2">
             <dt className="text-xs text-gray-400 mb-0.5">经营范围</dt>
             <dd className="font-medium text-gray-800 leading-relaxed">{partner.businessScope}</dd>
-          </div>
-        )}
-        {partner.coverageArea.length > 0 && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">覆盖区域</dt>
-            <dd className="font-medium text-gray-800">{partner.coverageArea.join('、')}</dd>
-          </div>
-        )}
-        {businessInfoSource && (
-          <div className="sm:col-span-2">
-            <dt className="text-xs text-gray-400 mb-0.5">工商信息来源</dt>
-            <dd className="font-medium text-gray-700 break-all">{businessInfoSource}</dd>
-          </div>
-        )}
-        {dataSource && (
-          <div>
-            <dt className="text-xs text-gray-400 mb-0.5">数据来源</dt>
-            <dd className="font-medium text-gray-700">{dataSource}</dd>
           </div>
         )}
         <div>
