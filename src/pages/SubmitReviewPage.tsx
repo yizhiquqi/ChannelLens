@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { ChevronLeft, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
@@ -7,6 +7,7 @@ import { insertCooperationReview, isSupabaseConfigured, uploadEvidenceFiles, typ
 interface Props {
   onNavigate: (page: string) => void;
   user?: User;
+  initialPartnerId?: string;
 }
 
 const PLATFORMS = ['抖音', '小红书', '视频号', '淘宝直播', '微信私域', '快手', '其他'];
@@ -106,13 +107,24 @@ function ScoreSelector({ label, value, onChange }: { label: string; value: numbe
   );
 }
 
-export default function SubmitReviewPage({ onNavigate, user }: Props) {
+export default function SubmitReviewPage({ onNavigate, user, initialPartnerId = '' }: Props) {
   const { partners } = useCSVData();
   const [form, setForm] = useState<FormData>(initialForm);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!initialPartnerId || partners.length === 0) return;
+    const partner = partners.find((item) => item.id === initialPartnerId);
+    if (!partner) return;
+    setForm((prev) => ({
+      ...prev,
+      partnerId: partner.id,
+      partnerNameFree: '',
+    }));
+  }, [initialPartnerId, partners]);
 
   function f(patch: Partial<FormData>) {
     setForm((prev) => ({ ...prev, ...patch }));

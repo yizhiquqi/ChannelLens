@@ -460,14 +460,14 @@ function AdaptationIndexModule({ partner }: { partner: Partner }) {
 }
 
 // ─── Module F: Verified Reviews ───────────────────────────────────────────────
-function VerifiedReviewsModule({ reviews, onNavigate }: { reviews: CooperationReview[]; onNavigate: (page: string) => void }) {
+function VerifiedReviewsModule({ reviews, partnerId, onNavigate }: { reviews: CooperationReview[]; partnerId: string; onNavigate: (page: string, id?: string) => void }) {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-6">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide flex items-center gap-2">
           <CheckCircle size={14} />F. 品牌方已验证合作反馈
         </h2>
-        <button onClick={() => onNavigate('submit')} className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+        <button onClick={() => onNavigate('submit', partnerId)} className="text-xs text-blue-600 hover:text-blue-700 font-medium">
           + 提交反馈
         </button>
       </div>
@@ -659,7 +659,7 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
                   申请尽调报告
                 </button>
                 <button
-                  onClick={() => onNavigate('submit')}
+                  onClick={() => onNavigate('submit', partner.id)}
                   className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   提交合作反馈
@@ -680,7 +680,7 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
             <PublicCasesModule partner={partner} />
             <RelationshipsModule relationships={partnerRelationships} />
             <AdaptationIndexModule partner={partner} />
-            <VerifiedReviewsModule reviews={verifiedReviews} onNavigate={onNavigate} />
+            <VerifiedReviewsModule reviews={verifiedReviews} partnerId={partner.id} onNavigate={onNavigate} />
             <RiskModule partner={partner} />
             <DueDiligenceCTA partner={partner} onNavigate={onNavigate} />
           </div>

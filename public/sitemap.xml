@@ -15,6 +15,12 @@
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
+  <url><loc>https://quping.cc/partners/P_COMPANY_001</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://quping.cc/partners/P_COMPANY_002</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://quping.cc/partners/P_COMPANY_004</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://quping.cc/partners/P_COMPANY_005</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://quping.cc/partners/P001</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://quping.cc/partners/P002</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
   <url><loc>https://quping.cc/company/wuyou-media</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
   <url><loc>https://quping.cc/company/changwan</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
   <url><loc>https://quping.cc/company/yuxin</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>

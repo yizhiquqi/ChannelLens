@@ -33,10 +33,16 @@ function getDueDiligencePartnerIdFromPath() {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+function getReviewPartnerIdFromPath() {
+  const match = window.location.pathname.match(/^\/reviews\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 function getInitialPage(): Page {
   if (getCompanySlugFromPath()) return 'company';
   if (getPartnerIdFromPath()) return 'detail';
   if (getDueDiligencePartnerIdFromPath()) return 'due-diligence';
+  if (getReviewPartnerIdFromPath()) return 'submit';
   if (window.location.pathname === '/partners') return 'list';
   if (window.location.pathname === '/reviews') return 'submit';
   if (window.location.pathname === '/due-diligence') return 'due-diligence';
@@ -51,6 +57,7 @@ export default function App() {
   const [page, setPage] = useState<Page>(getInitialPage);
   const [detailId, setDetailId] = useState<string>(getPartnerIdFromPath);
   const [dueDiligencePartnerId, setDueDiligencePartnerId] = useState<string>(getDueDiligencePartnerIdFromPath);
+  const [reviewPartnerId, setReviewPartnerId] = useState<string>(getReviewPartnerIdFromPath);
   const [companySlug, setCompanySlug] = useState<string>(getCompanySlugFromPath);
   const [adminAuthed, setAdminAuthed] = useState(() => hasAdminSession());
   const [session, setSession] = useState<Session | null>(null);
@@ -73,6 +80,9 @@ export default function App() {
     if (target === 'due-diligence') {
       setDueDiligencePartnerId(id ?? '');
     }
+    if (target === 'submit') {
+      setReviewPartnerId(id ?? '');
+    }
     if (target === 'company' && id) {
       setCompanySlug(id);
     }
@@ -83,6 +93,8 @@ export default function App() {
       window.history.pushState({}, '', `/partners/${encodeURIComponent(id)}`);
     } else if (target === 'list') {
       window.history.pushState({}, '', '/partners');
+    } else if (target === 'submit' && id) {
+      window.history.pushState({}, '', `/reviews/${encodeURIComponent(id)}`);
     } else if (target === 'submit') {
       window.history.pushState({}, '', '/reviews');
     } else if (target === 'due-diligence' && id) {
@@ -95,7 +107,7 @@ export default function App() {
       window.history.pushState({}, '', `/admin?partner=${encodeURIComponent(id)}`);
     } else if (target === 'data-collector' || target === 'creator-onboarding' || target === 'admin' || target === 'login' || target === 'account') {
       window.history.pushState({}, '', `/${target}`);
-    } else if (['/data-collector', '/creator-onboarding', '/admin', '/login', '/account', '/partners', '/reviews'].includes(window.location.pathname) || window.location.pathname.startsWith('/company/') || window.location.pathname.startsWith('/partners/') || window.location.pathname.startsWith('/due-diligence/')) {
+    } else if (['/data-collector', '/creator-onboarding', '/admin', '/login', '/account', '/partners', '/reviews'].includes(window.location.pathname) || window.location.pathname.startsWith('/company/') || window.location.pathname.startsWith('/partners/') || window.location.pathname.startsWith('/due-diligence/') || window.location.pathname.startsWith('/reviews/')) {
       window.history.pushState({}, '', '/');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -118,9 +130,9 @@ export default function App() {
         {page === 'company' && <CompanyDetailPage slug={companySlug} onNavigate={handleNavigate} />}
         {page === 'submit' && (
           isSupabaseConfigured && !session ? (
-            <LoginPage onNavigate={handleNavigate} onLoggedIn={() => handleNavigate('submit')} redirectLabel="登录后提交合作反馈" />
+            <LoginPage onNavigate={handleNavigate} onLoggedIn={() => handleNavigate('submit', reviewPartnerId || undefined)} redirectLabel="登录后提交合作反馈" />
           ) : (
-            <SubmitReviewPage onNavigate={handleNavigate} user={session?.user} />
+            <SubmitReviewPage onNavigate={handleNavigate} user={session?.user} initialPartnerId={reviewPartnerId} />
           )
         )}
         {page === 'due-diligence' && <DueDiligenceRequestPage onNavigate={handleNavigate} initialPartnerId={dueDiligencePartnerId} />}
