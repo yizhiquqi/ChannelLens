@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle, FileText, Search, Shield } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
 import { insertDueDiligenceRequest } from '../lib/database';
 
 interface DueDiligenceRequestPageProps {
   onNavigate: (page: string) => void;
+  initialPartnerId?: string;
 }
 
 const REPORT_TYPES = [
@@ -71,13 +72,24 @@ function submitErrorMessage(error: unknown) {
   return detail ? `提交尽调申请失败：${detail}` : '提交尽调申请失败，请稍后重试。';
 }
 
-export default function DueDiligenceRequestPage({ onNavigate }: DueDiligenceRequestPageProps) {
+export default function DueDiligenceRequestPage({ onNavigate, initialPartnerId = '' }: DueDiligenceRequestPageProps) {
   const { partners } = useCSVData();
   const [selectedType, setSelectedType] = useState('standard');
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    if (!initialPartnerId || partners.length === 0) return;
+    const partner = partners.find((item) => item.id === initialPartnerId);
+    if (!partner) return;
+    setForm((prev) => ({
+      ...prev,
+      target_partner_id: partner.id,
+      target_partner_name: partner.displayName,
+    }));
+  }, [initialPartnerId, partners]);
 
   function handleChange(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));

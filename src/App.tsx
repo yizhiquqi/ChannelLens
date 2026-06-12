@@ -28,11 +28,18 @@ function getPartnerIdFromPath() {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+function getDueDiligencePartnerIdFromPath() {
+  const match = window.location.pathname.match(/^\/due-diligence\/([^/]+)\/?$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 function getInitialPage(): Page {
   if (getCompanySlugFromPath()) return 'company';
   if (getPartnerIdFromPath()) return 'detail';
+  if (getDueDiligencePartnerIdFromPath()) return 'due-diligence';
   if (window.location.pathname === '/partners') return 'list';
   if (window.location.pathname === '/reviews') return 'submit';
+  if (window.location.pathname === '/due-diligence') return 'due-diligence';
   if (window.location.pathname === '/admin') return 'admin';
   if (window.location.pathname === '/creator-onboarding') return 'creator-onboarding';
   if (window.location.pathname === '/login') return 'login';
@@ -43,6 +50,7 @@ function getInitialPage(): Page {
 export default function App() {
   const [page, setPage] = useState<Page>(getInitialPage);
   const [detailId, setDetailId] = useState<string>(getPartnerIdFromPath);
+  const [dueDiligencePartnerId, setDueDiligencePartnerId] = useState<string>(getDueDiligencePartnerIdFromPath);
   const [companySlug, setCompanySlug] = useState<string>(getCompanySlugFromPath);
   const [adminAuthed, setAdminAuthed] = useState(() => hasAdminSession());
   const [session, setSession] = useState<Session | null>(null);
@@ -62,6 +70,9 @@ export default function App() {
     if (target === 'detail' && id) {
       setDetailId(id);
     }
+    if (target === 'due-diligence') {
+      setDueDiligencePartnerId(id ?? '');
+    }
     if (target === 'company' && id) {
       setCompanySlug(id);
     }
@@ -74,13 +85,17 @@ export default function App() {
       window.history.pushState({}, '', '/partners');
     } else if (target === 'submit') {
       window.history.pushState({}, '', '/reviews');
+    } else if (target === 'due-diligence' && id) {
+      window.history.pushState({}, '', `/due-diligence/${encodeURIComponent(id)}`);
+    } else if (target === 'due-diligence') {
+      window.history.pushState({}, '', '/due-diligence');
     } else if (target === 'home') {
       window.history.pushState({}, '', '/');
     } else if (target === 'admin' && id) {
       window.history.pushState({}, '', `/admin?partner=${encodeURIComponent(id)}`);
     } else if (target === 'data-collector' || target === 'creator-onboarding' || target === 'admin' || target === 'login' || target === 'account') {
       window.history.pushState({}, '', `/${target}`);
-    } else if (['/data-collector', '/creator-onboarding', '/admin', '/login', '/account', '/partners', '/reviews'].includes(window.location.pathname) || window.location.pathname.startsWith('/company/') || window.location.pathname.startsWith('/partners/')) {
+    } else if (['/data-collector', '/creator-onboarding', '/admin', '/login', '/account', '/partners', '/reviews'].includes(window.location.pathname) || window.location.pathname.startsWith('/company/') || window.location.pathname.startsWith('/partners/') || window.location.pathname.startsWith('/due-diligence/')) {
       window.history.pushState({}, '', '/');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -108,7 +123,7 @@ export default function App() {
             <SubmitReviewPage onNavigate={handleNavigate} user={session?.user} />
           )
         )}
-        {page === 'due-diligence' && <DueDiligenceRequestPage onNavigate={handleNavigate} />}
+        {page === 'due-diligence' && <DueDiligenceRequestPage onNavigate={handleNavigate} initialPartnerId={dueDiligencePartnerId} />}
         {page === 'admin' && (
           adminAuthed ? (
             <AdminPage />

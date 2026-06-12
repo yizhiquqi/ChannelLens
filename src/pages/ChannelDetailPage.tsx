@@ -515,7 +515,7 @@ function RiskModule({ partner }: { partner: Partner }) {
 }
 
 // ─── Module H: Due Diligence CTA ─────────────────────────────────────────────
-function DueDiligenceCTA({ partner, onNavigate }: { partner: Partner; onNavigate: (page: string) => void }) {
+function DueDiligenceCTA({ partner, onNavigate }: { partner: Partner; onNavigate: (page: string, id?: string) => void }) {
   return (
     <div className="bg-slate-900 rounded-2xl p-6 text-white">
       <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -538,7 +538,7 @@ function DueDiligenceCTA({ partner, onNavigate }: { partner: Partner; onNavigate
         ))}
       </div>
       <button
-        onClick={() => onNavigate('due-diligence')}
+        onClick={() => onNavigate('due-diligence', partner.id)}
         className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-colors text-sm"
       >
         申请尽调报告
@@ -653,7 +653,7 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
                   管理员编辑
                 </button>
                 <button
-                  onClick={() => onNavigate('due-diligence')}
+                  onClick={() => onNavigate('due-diligence', partner.id)}
                   className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   申请尽调报告
