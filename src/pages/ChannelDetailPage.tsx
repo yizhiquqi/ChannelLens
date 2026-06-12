@@ -219,10 +219,10 @@ function IdentityModule({ partner }: { partner: Partner }) {
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3 text-sm">
-        {partner.legalEntity && (
+        {(partner.entityType === 'company' || partner.legalEntity) && (
           <div className="sm:col-span-2">
             <dt className="text-xs text-gray-400 mb-0.5">公司主体</dt>
-            <dd className="font-medium text-gray-800">{partner.legalEntity}</dd>
+            <dd className="font-medium text-gray-800">{partner.legalEntity || '待补充'}</dd>
           </div>
         )}
         {partner.companyType && (
