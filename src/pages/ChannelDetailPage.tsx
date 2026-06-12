@@ -5,7 +5,7 @@ import {
   BarChart3, Info, ExternalLink, Edit3,
 } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
-import { getBusinessInfoSourceLabel, getPublicDataSourceLabel } from '../lib/displaySources';
+import { getBusinessInfoSourceLabel } from '../lib/displaySources';
 import type { Partner, CooperationReview, PartnerRelationship } from '../types';
 
 interface Props {
@@ -194,7 +194,6 @@ function IdentityModule({ partner }: { partner: Partner }) {
   const Icon = entityIcon;
   const entityLabel = partner.entityType === 'company' ? '公司' : partner.entityType === 'team' ? '团队' : '个人';
   const businessInfoSource = getBusinessInfoSourceLabel(partner);
-  const dataSource = getPublicDataSourceLabel(partner.dataSource);
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-6">
@@ -220,6 +219,12 @@ function IdentityModule({ partner }: { partner: Partner }) {
       </div>
 
       <div className="grid sm:grid-cols-2 gap-3 text-sm">
+        {partner.legalEntity && (
+          <div className="sm:col-span-2">
+            <dt className="text-xs text-gray-400 mb-0.5">公司主体</dt>
+            <dd className="font-medium text-gray-800">{partner.legalEntity}</dd>
+          </div>
+        )}
         {partner.companyType && (
           <div>
             <dt className="text-xs text-gray-400 mb-0.5">企业类型</dt>
@@ -254,6 +259,12 @@ function IdentityModule({ partner }: { partner: Partner }) {
           <div className="sm:col-span-2">
             <dt className="text-xs text-gray-400 mb-0.5">经营范围</dt>
             <dd className="font-medium text-gray-800 leading-relaxed">{partner.businessScope}</dd>
+          </div>
+        )}
+        {businessInfoSource && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">工商信息来源</dt>
+            <dd className="font-medium text-gray-700">{businessInfoSource}</dd>
           </div>
         )}
         <div>
