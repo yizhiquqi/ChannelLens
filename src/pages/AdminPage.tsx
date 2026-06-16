@@ -11,11 +11,13 @@ import {
   Save,
   ShieldAlert,
   Tag,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useCSVData } from '../lib/CSVDataContext';
 import {
   createEvidenceFileUrl,
+  deleteAdminPartner,
   fetchAdminPartners,
   fetchCooperationReviews,
   fetchCreatorProfiles,
@@ -438,6 +440,7 @@ export default function AdminPage() {
   const [editingCreatorIndex, setEditingCreatorIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
   const [remoteLoading, setRemoteLoading] = useState(false);
+  const [deletingPartnerId, setDeletingPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (partners.length === 0) return;
@@ -691,6 +694,29 @@ export default function AdminPage() {
     if (!editingPartner) return;
     savePartners(editablePartners.map((partner) => (partner.id === editingPartner.id ? editingPartner : partner)));
     setEditingPartner(null);
+  }
+
+  async function deletePartner(partner: AdminPartner) {
+    const confirmed = window.confirm(`确认删除「${partner.displayName}」吗？删除后将从后台档案和公开页面移除。`);
+    if (!confirmed) return;
+
+    const nextPartners = editablePartners.filter((item) => item.id !== partner.id);
+    setDeletingPartnerId(partner.id);
+
+    try {
+      if (isSupabaseConfigured) {
+        await deleteAdminPartner(partner.id);
+      }
+
+      setEditablePartners(nextPartners);
+      window.localStorage.setItem(PARTNER_STORAGE_KEY, JSON.stringify(nextPartners));
+      if (editingPartner?.id === partner.id) setEditingPartner(null);
+      setNotice(isSupabaseConfigured ? '已删除合作方档案，并同步到云端数据库。' : '已从本地后台档案删除。');
+    } catch {
+      setNotice('删除失败：云端数据库可能还没开启管理员删除权限，请先补跑删除权限 SQL。');
+    } finally {
+      setDeletingPartnerId(null);
+    }
   }
 
   function updateCreator(index: number, patch: Partial<CreatorProfile>) {
@@ -975,6 +1001,14 @@ export default function AdminPage() {
                             >
                               <Tag size={12} />
                               风险标签
+                            </button>
+                            <button
+                              onClick={() => deletePartner(partner)}
+                              disabled={deletingPartnerId === partner.id}
+                              className="inline-flex items-center gap-1 text-xs bg-white text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingPartnerId === partner.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                              删除
                             </button>
                           </div>
                         </td>

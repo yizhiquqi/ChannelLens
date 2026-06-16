@@ -204,6 +204,23 @@ export async function upsertAdminPartners(partners: JsonRecord[]) {
   if (visibilityError) throw visibilityError;
 }
 
+export async function deleteAdminPartner(partnerId: string) {
+  if (!supabase) return;
+
+  await supabase.from('partner_visibility').delete().eq('id', partnerId);
+
+  const { data, error } = await supabase
+    .from('admin_partners')
+    .delete()
+    .eq('id', partnerId)
+    .select('id');
+
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error('No admin partner row was deleted. Check Supabase delete policy.');
+  }
+}
+
 export async function uploadEvidenceFiles(files: File[], ownerId?: string) {
   if (!supabase) {
     return files.map((file) => ({ name: file.name, path: file.name, size: file.size, type: file.type }));
