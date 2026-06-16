@@ -18,6 +18,9 @@ import { useCSVData } from '../lib/CSVDataContext';
 import {
   createEvidenceFileUrl,
   deleteAdminPartner,
+  deleteCooperationReview,
+  deleteCreatorProfile,
+  deleteDueDiligenceRequest,
   fetchAdminPartners,
   fetchCooperationReviews,
   fetchCreatorProfiles,
@@ -127,6 +130,9 @@ const PARTNER_STORAGE_KEY = 'channellens_admin_partners';
 const CREATOR_STORAGE_KEY = 'channellens_creator_profiles';
 const REVIEW_STORAGE_KEY = 'channellens_reviews';
 const DUE_DILIGENCE_STORAGE_KEY = 'dd_requests';
+const DELETED_CREATOR_STORAGE_KEY = 'channellens_deleted_creator_profiles';
+const DELETED_REVIEW_STORAGE_KEY = 'channellens_deleted_reviews';
+const DELETED_DUE_DILIGENCE_STORAGE_KEY = 'channellens_deleted_due_diligence_requests';
 
 const verificationOptions = ['未核验', '部分核验', '已核验'];
 const visibilityOptions: Visibility[] = ['public', 'internal'];
@@ -441,6 +447,10 @@ export default function AdminPage() {
   const [notice, setNotice] = useState('');
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [deletingPartnerId, setDeletingPartnerId] = useState<string | null>(null);
+  const [deletingSubmissionId, setDeletingSubmissionId] = useState<string | null>(null);
+  const [deletedCreatorIds, setDeletedCreatorIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_CREATOR_STORAGE_KEY));
+  const [deletedReviewIds, setDeletedReviewIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_REVIEW_STORAGE_KEY));
+  const [deletedDueDiligenceIds, setDeletedDueDiligenceIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_DUE_DILIGENCE_STORAGE_KEY));
 
   useEffect(() => {
     if (partners.length === 0) return;
@@ -496,9 +506,9 @@ export default function AdminPage() {
       const localDueDiligenceRequests = parseStoredArray<DueDiligenceRequest>(DUE_DILIGENCE_STORAGE_KEY);
 
       if (!isSupabaseConfigured) {
-        setCreatorProfiles(localProfiles);
-        setLocalReviews(localFeedback);
-        setDueDiligenceRequests(localDueDiligenceRequests);
+        setCreatorProfiles(localProfiles.filter((profile) => !deletedCreatorIds.includes(String(profile.id))));
+        setLocalReviews(localFeedback.filter((review) => !deletedReviewIds.includes(String(review.id))));
+        setDueDiligenceRequests(localDueDiligenceRequests.filter((request) => !deletedDueDiligenceIds.includes(String(request.id))));
         return;
       }
 
@@ -511,14 +521,20 @@ export default function AdminPage() {
         ]);
 
         if (cancelled) return;
-        setCreatorProfiles(mergeById(remoteProfiles as Record<string, unknown>[], localProfiles as Record<string, unknown>[]) as CreatorProfile[]);
-        setLocalReviews(mergeById(remoteFeedback, localFeedback));
-        setDueDiligenceRequests(mergeById(remoteDueDiligenceRequests, localDueDiligenceRequests));
+        setCreatorProfiles(
+          (mergeById(remoteProfiles as Record<string, unknown>[], localProfiles as Record<string, unknown>[]) as CreatorProfile[])
+            .filter((profile) => !deletedCreatorIds.includes(String(profile.id)))
+        );
+        setLocalReviews(mergeById(remoteFeedback, localFeedback).filter((review) => !deletedReviewIds.includes(String(review.id))));
+        setDueDiligenceRequests(
+          mergeById(remoteDueDiligenceRequests, localDueDiligenceRequests)
+            .filter((request) => !deletedDueDiligenceIds.includes(String(request.id)))
+        );
       } catch {
         if (cancelled) return;
-        setCreatorProfiles(localProfiles);
-        setLocalReviews(localFeedback);
-        setDueDiligenceRequests(localDueDiligenceRequests);
+        setCreatorProfiles(localProfiles.filter((profile) => !deletedCreatorIds.includes(String(profile.id))));
+        setLocalReviews(localFeedback.filter((review) => !deletedReviewIds.includes(String(review.id))));
+        setDueDiligenceRequests(localDueDiligenceRequests.filter((request) => !deletedDueDiligenceIds.includes(String(request.id))));
         setNotice('云端数据读取失败，当前显示本机缓存数据。');
       } finally {
         if (!cancelled) setRemoteLoading(false);
@@ -529,7 +545,7 @@ export default function AdminPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [deletedCreatorIds, deletedDueDiligenceIds, deletedReviewIds]);
 
   const allReviews: LocalReview[] = useMemo(
     () => mergeById(
@@ -539,8 +555,8 @@ export default function AdminPage() {
         reviewStatus: review.reviewStatus,
         evidenceStatus: review.evidenceStatus,
       })) as unknown as LocalReview[]
-    ),
-    [localReviews, reviews]
+    ).filter((review) => !deletedReviewIds.includes(String(review.id))),
+    [deletedReviewIds, localReviews, reviews]
   );
 
   const stats = useMemo(() => {
@@ -716,6 +732,88 @@ export default function AdminPage() {
       setNotice('删除失败：云端数据库可能还没开启管理员删除权限，请先补跑删除权限 SQL。');
     } finally {
       setDeletingPartnerId(null);
+    }
+  }
+
+  async function deleteCreatorSubmission(index: number) {
+    const profile = creatorProfiles[index];
+    if (!profile) return;
+
+    const name = profile.creatorName || profile.mcnName || profile.brandName || profile.companyName || '这条入驻申请';
+    const confirmed = window.confirm(`确认删除「${name}」吗？删除后后台不再显示这条入驻申请。`);
+    if (!confirmed) return;
+
+    const id = String(profile.id);
+    setDeletingSubmissionId(id);
+    try {
+      if (isSupabaseConfigured && id) {
+        await deleteCreatorProfile(id);
+      }
+
+      const nextDeletedIds = Array.from(new Set([...deletedCreatorIds, id]));
+      const nextProfiles = creatorProfiles.filter((_, itemIndex) => itemIndex !== index);
+      setDeletedCreatorIds(nextDeletedIds);
+      setCreatorProfiles(nextProfiles);
+      window.localStorage.setItem(DELETED_CREATOR_STORAGE_KEY, JSON.stringify(nextDeletedIds));
+      window.localStorage.setItem(CREATOR_STORAGE_KEY, JSON.stringify(nextProfiles));
+      if (editingCreatorIndex === index) setEditingCreatorIndex(null);
+      setNotice('已删除入驻申请。');
+    } catch {
+      setNotice('删除失败：云端数据库可能还没开启入驻申请删除权限，请先补跑删除权限 SQL。');
+    } finally {
+      setDeletingSubmissionId(null);
+    }
+  }
+
+  async function deleteReviewSubmission(review: LocalReview) {
+    const name = review.isAnonymous ? '匿名合作反馈' : (review.brandName || '这条合作反馈');
+    const confirmed = window.confirm(`确认删除「${name}」吗？删除后后台不再显示这条合作反馈。`);
+    if (!confirmed) return;
+
+    const id = String(review.id);
+    setDeletingSubmissionId(id);
+    try {
+      if (isSupabaseConfigured && id) {
+        await deleteCooperationReview(id);
+      }
+
+      const nextDeletedIds = Array.from(new Set([...deletedReviewIds, id]));
+      const nextReviews = localReviews.filter((item) => item.id !== id);
+      setDeletedReviewIds(nextDeletedIds);
+      setLocalReviews(nextReviews);
+      window.localStorage.setItem(DELETED_REVIEW_STORAGE_KEY, JSON.stringify(nextDeletedIds));
+      window.localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(nextReviews));
+      setNotice('已删除合作反馈。');
+    } catch {
+      setNotice('删除失败：云端数据库可能还没开启合作反馈删除权限，请先补跑删除权限 SQL。');
+    } finally {
+      setDeletingSubmissionId(null);
+    }
+  }
+
+  async function deleteDueDiligenceSubmission(request: DueDiligenceRequest) {
+    const name = request.target_partner_name || request.brand_name || '这条尽调申请';
+    const confirmed = window.confirm(`确认删除「${name}」吗？删除后后台不再显示这条尽调申请。`);
+    if (!confirmed) return;
+
+    const id = String(request.id);
+    setDeletingSubmissionId(id);
+    try {
+      if (isSupabaseConfigured && id) {
+        await deleteDueDiligenceRequest(id);
+      }
+
+      const nextDeletedIds = Array.from(new Set([...deletedDueDiligenceIds, id]));
+      const nextRequests = dueDiligenceRequests.filter((item) => item.id !== id);
+      setDeletedDueDiligenceIds(nextDeletedIds);
+      setDueDiligenceRequests(nextRequests);
+      window.localStorage.setItem(DELETED_DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextDeletedIds));
+      window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextRequests));
+      setNotice('已删除尽调申请。');
+    } catch {
+      setNotice('删除失败：云端数据库可能还没开启尽调申请删除权限，请先补跑删除权限 SQL。');
+    } finally {
+      setDeletingSubmissionId(null);
     }
   }
 
@@ -1178,6 +1276,14 @@ export default function AdminPage() {
                               >
                                 驳回
                               </button>
+                              <button
+                                onClick={() => deleteCreatorSubmission(index)}
+                                disabled={deletingSubmissionId === String(profile.id)}
+                                className="inline-flex items-center gap-1 text-xs bg-white text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {deletingSubmissionId === String(profile.id) ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                删除
+                              </button>
                             </div>
                             {(profile.reviewReason || profile.reviewedAt) && (
                               <div className="mt-2 max-w-[260px] text-[10px] text-gray-400 leading-relaxed">
@@ -1240,6 +1346,14 @@ export default function AdminPage() {
                         </button>
                         <button onClick={() => setDueDiligenceStatus(request.id, 'rejected')} className="text-xs bg-red-50 text-red-600 border border-red-100 px-2.5 py-1.5 rounded-lg hover:bg-red-100">
                           关闭/驳回
+                        </button>
+                        <button
+                          onClick={() => deleteDueDiligenceSubmission(request)}
+                          disabled={deletingSubmissionId === request.id}
+                          className="inline-flex items-center justify-center gap-1 text-xs bg-white text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingSubmissionId === request.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          删除
                         </button>
                       </div>
                     </div>
@@ -1370,6 +1484,14 @@ export default function AdminPage() {
                           className="text-xs bg-red-50 text-red-600 border border-red-100 px-2.5 py-1.5 rounded-lg hover:bg-red-100"
                         >
                           驳回反馈
+                        </button>
+                        <button
+                          onClick={() => deleteReviewSubmission(review)}
+                          disabled={deletingSubmissionId === review.id}
+                          className="inline-flex items-center gap-1 text-xs bg-white text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingSubmissionId === review.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          删除
                         </button>
                       </div>
                     )}

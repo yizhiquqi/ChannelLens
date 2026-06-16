@@ -133,6 +133,19 @@ export async function upsertCreatorProfiles(profiles: JsonRecord[]) {
   if (error) throw error;
 }
 
+export async function deleteCreatorProfile(profileId: string) {
+  if (!supabase) return;
+
+  const { data, error } = await supabase
+    .from('partner_profiles')
+    .delete()
+    .eq('id', profileId)
+    .select('id');
+
+  if (error) throw error;
+  if (!data?.length) throw new Error('No creator profile was deleted.');
+}
+
 export async function fetchAdminPartners<T extends DataObject>() {
   if (!supabase) return [] as T[];
 
@@ -331,6 +344,19 @@ export async function upsertCooperationReviews(reviews: JsonRecord[]) {
   if (error) throw error;
 }
 
+export async function deleteCooperationReview(reviewId: string) {
+  if (!supabase) return;
+
+  const { data, error } = await supabase
+    .from('cooperation_feedback')
+    .delete()
+    .eq('id', reviewId)
+    .select('id');
+
+  if (error) throw error;
+  if (!data?.length) throw new Error('No cooperation review was deleted.');
+}
+
 export async function insertDueDiligenceRequest(payload: JsonRecord) {
   const id = withId(payload, 'DD');
   const nextPayload: JsonRecord = { ...payload, id };
@@ -385,6 +411,19 @@ export async function upsertDueDiligenceRequests(requests: JsonRecord[]) {
 
   const { error } = await supabase.from('due_diligence_requests').upsert(rows);
   if (error) throw error;
+}
+
+export async function deleteDueDiligenceRequest(requestId: string) {
+  if (!supabase) return;
+
+  const { data, error } = await supabase
+    .from('due_diligence_requests')
+    .delete()
+    .eq('id', requestId)
+    .select('id');
+
+  if (error) throw error;
+  if (!data?.length) throw new Error('No due diligence request was deleted.');
 }
 
 export async function insertRawCollection(payload: JsonRecord) {
