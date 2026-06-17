@@ -500,3 +500,30 @@ export async function fetchIsAdmin(userId: string, email?: string) {
   if (error) return false;
   return Boolean(data);
 }
+
+export async function insertRegistrationRequest(payload: JsonRecord) {
+  const id = withId(payload, 'REG');
+  const nextPayload: JsonRecord = {
+    ...payload,
+    id,
+    status: String(payload.status ?? 'pending'),
+    submittedAt: payload.submittedAt ?? new Date().toISOString(),
+  };
+
+  if (!supabase) {
+    return { ...nextPayload, storage: 'local' };
+  }
+
+  const { error } = await supabase.from('registration_requests').insert({
+    id,
+    status: String(nextPayload.status ?? 'pending'),
+    applicant_name: String(nextPayload.name ?? ''),
+    applicant_email: String(nextPayload.email ?? ''),
+    applicant_type: String(nextPayload.applicantType ?? ''),
+    intent: String(nextPayload.intent ?? ''),
+    payload: nextPayload,
+  });
+
+  if (error) throw error;
+  return { ...nextPayload, storage: 'supabase' };
+}
