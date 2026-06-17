@@ -527,3 +527,59 @@ export async function insertRegistrationRequest(payload: JsonRecord) {
   if (error) throw error;
   return { ...nextPayload, storage: 'supabase' };
 }
+
+export async function fetchRegistrationRequests<T extends JsonRecord>() {
+  if (!supabase) return [] as T[];
+
+  const { data, error } = await supabase
+    .from('registration_requests')
+    .select('id,status,applicant_name,applicant_email,applicant_type,intent,payload,created_at,updated_at')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => ({
+    ...(row.payload as T),
+    id: row.id,
+    status: row.status,
+    name: (row.payload as JsonRecord)?.name ?? row.applicant_name,
+    email: (row.payload as JsonRecord)?.email ?? row.applicant_email,
+    applicantType: (row.payload as JsonRecord)?.applicantType ?? row.applicant_type,
+    intent: (row.payload as JsonRecord)?.intent ?? row.intent,
+    submittedAt: (row.payload as JsonRecord)?.submittedAt ?? row.created_at,
+  })) as T[];
+}
+
+export async function upsertRegistrationRequests(requests: JsonRecord[]) {
+  if (!supabase) return;
+
+  const rows = requests.map((request) => {
+    const id = withId(request, 'REG');
+    return {
+      id,
+      status: String(request.status ?? 'pending'),
+      applicant_name: String(request.name ?? ''),
+      applicant_email: String(request.email ?? ''),
+      applicant_type: String(request.applicantType ?? ''),
+      intent: String(request.intent ?? ''),
+      payload: { ...request, id },
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  const { error } = await supabase.from('registration_requests').upsert(rows);
+  if (error) throw error;
+}
+
+export async function deleteRegistrationRequest(requestId: string) {
+  if (!supabase) return;
+
+  const { data, error } = await supabase
+    .from('registration_requests')
+    .delete()
+    .eq('id', requestId)
+    .select('id');
+
+  if (error) throw error;
+  if (!data?.length) throw new Error('No registration request was deleted.');
+}

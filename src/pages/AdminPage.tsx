@@ -21,19 +21,22 @@ import {
   deleteCooperationReview,
   deleteCreatorProfile,
   deleteDueDiligenceRequest,
+  deleteRegistrationRequest,
   fetchAdminPartners,
   fetchCooperationReviews,
   fetchCreatorProfiles,
   fetchDueDiligenceRequests,
+  fetchRegistrationRequests,
   isSupabaseConfigured,
   upsertAdminPartners,
   upsertCooperationReviews,
   upsertCreatorProfiles,
   upsertDueDiligenceRequests,
+  upsertRegistrationRequests,
 } from '../lib/database';
 import type { Partner, CooperationReview } from '../types';
 
-type AdminTab = 'overview' | 'partners' | 'creatorProfiles' | 'reviews' | 'dueDiligence';
+type AdminTab = 'overview' | 'partners' | 'creatorProfiles' | 'reviews' | 'dueDiligence' | 'registrationRequests';
 type Visibility = 'public' | 'internal';
 type AdminPartner = Partner & {
   adminVisibility?: Visibility;
@@ -126,13 +129,29 @@ type DueDiligenceRequest = Record<string, unknown> & {
   submittedAt?: string;
 };
 
+type RegistrationRequest = Record<string, unknown> & {
+  id: string;
+  name?: string;
+  email?: string;
+  contact?: string;
+  applicantType?: string;
+  organization?: string;
+  intent?: string;
+  note?: string;
+  status?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+};
+
 const PARTNER_STORAGE_KEY = 'channellens_admin_partners';
 const CREATOR_STORAGE_KEY = 'channellens_creator_profiles';
 const REVIEW_STORAGE_KEY = 'channellens_reviews';
 const DUE_DILIGENCE_STORAGE_KEY = 'dd_requests';
+const REGISTRATION_REQUEST_STORAGE_KEY = 'channellens_registration_requests';
 const DELETED_CREATOR_STORAGE_KEY = 'channellens_deleted_creator_profiles';
 const DELETED_REVIEW_STORAGE_KEY = 'channellens_deleted_reviews';
 const DELETED_DUE_DILIGENCE_STORAGE_KEY = 'channellens_deleted_due_diligence_requests';
+const DELETED_REGISTRATION_REQUEST_STORAGE_KEY = 'channellens_deleted_registration_requests';
 
 const verificationOptions = ['未核验', '部分核验', '已核验'];
 const visibilityOptions: Visibility[] = ['public', 'internal'];
@@ -442,6 +461,7 @@ export default function AdminPage() {
   const [creatorProfiles, setCreatorProfiles] = useState<CreatorProfile[]>([]);
   const [localReviews, setLocalReviews] = useState<LocalReview[]>([]);
   const [dueDiligenceRequests, setDueDiligenceRequests] = useState<DueDiligenceRequest[]>([]);
+  const [registrationRequests, setRegistrationRequests] = useState<RegistrationRequest[]>([]);
   const [editingPartner, setEditingPartner] = useState<AdminPartner | null>(null);
   const [editingCreatorIndex, setEditingCreatorIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
@@ -451,6 +471,7 @@ export default function AdminPage() {
   const [deletedCreatorIds, setDeletedCreatorIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_CREATOR_STORAGE_KEY));
   const [deletedReviewIds, setDeletedReviewIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_REVIEW_STORAGE_KEY));
   const [deletedDueDiligenceIds, setDeletedDueDiligenceIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_DUE_DILIGENCE_STORAGE_KEY));
+  const [deletedRegistrationRequestIds, setDeletedRegistrationRequestIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_REGISTRATION_REQUEST_STORAGE_KEY));
 
   useEffect(() => {
     if (partners.length === 0) return;
@@ -504,20 +525,23 @@ export default function AdminPage() {
       const localProfiles = parseStoredArray<CreatorProfile>(CREATOR_STORAGE_KEY);
       const localFeedback = parseStoredArray<LocalReview>(REVIEW_STORAGE_KEY);
       const localDueDiligenceRequests = parseStoredArray<DueDiligenceRequest>(DUE_DILIGENCE_STORAGE_KEY);
+      const localRegistrationRequests = parseStoredArray<RegistrationRequest>(REGISTRATION_REQUEST_STORAGE_KEY);
 
       if (!isSupabaseConfigured) {
         setCreatorProfiles(localProfiles.filter((profile) => !deletedCreatorIds.includes(String(profile.id))));
         setLocalReviews(localFeedback.filter((review) => !deletedReviewIds.includes(String(review.id))));
         setDueDiligenceRequests(localDueDiligenceRequests.filter((request) => !deletedDueDiligenceIds.includes(String(request.id))));
+        setRegistrationRequests(localRegistrationRequests.filter((request) => !deletedRegistrationRequestIds.includes(String(request.id))));
         return;
       }
 
       setRemoteLoading(true);
       try {
-        const [remoteProfiles, remoteFeedback, remoteDueDiligenceRequests] = await Promise.all([
+        const [remoteProfiles, remoteFeedback, remoteDueDiligenceRequests, remoteRegistrationRequests] = await Promise.all([
           fetchCreatorProfiles<CreatorProfile>(),
           fetchCooperationReviews<LocalReview>(),
           fetchDueDiligenceRequests<DueDiligenceRequest>(),
+          fetchRegistrationRequests<RegistrationRequest>(),
         ]);
 
         if (cancelled) return;
@@ -530,8 +554,13 @@ export default function AdminPage() {
           mergeById(remoteDueDiligenceRequests, localDueDiligenceRequests)
             .filter((request) => !deletedDueDiligenceIds.includes(String(request.id)))
         );
+        setRegistrationRequests(
+          mergeById(remoteRegistrationRequests, localRegistrationRequests)
+            .filter((request) => !deletedRegistrationRequestIds.includes(String(request.id)))
+        );
       } catch {
         if (cancelled) return;
+        setRegistrationRequests(localRegistrationRequests.filter((request) => !deletedRegistrationRequestIds.includes(String(request.id))));
         setCreatorProfiles(localProfiles.filter((profile) => !deletedCreatorIds.includes(String(profile.id))));
         setLocalReviews(localFeedback.filter((review) => !deletedReviewIds.includes(String(review.id))));
         setDueDiligenceRequests(localDueDiligenceRequests.filter((request) => !deletedDueDiligenceIds.includes(String(request.id))));
@@ -545,7 +574,7 @@ export default function AdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [deletedCreatorIds, deletedDueDiligenceIds, deletedReviewIds]);
+  }, [deletedCreatorIds, deletedDueDiligenceIds, deletedRegistrationRequestIds, deletedReviewIds]);
 
   const allReviews: LocalReview[] = useMemo(
     () => mergeById(
@@ -562,13 +591,15 @@ export default function AdminPage() {
   const stats = useMemo(() => {
     const pendingCreators = creatorProfiles.filter((profile) => (profile.status ?? 'pending') === 'pending').length;
     const pendingDueDiligence = dueDiligenceRequests.filter((request) => (request.status ?? 'pending') === 'pending').length;
+    const pendingRegistrations = registrationRequests.filter((request) => (request.status ?? 'pending') === 'pending').length;
     return [
       { label: '合作方档案', value: editablePartners.length, sub: '可编辑核验状态、标签和可见性', color: 'text-blue-600' },
       { label: '合作商入驻申请', value: creatorProfiles.length, sub: `${pendingCreators} 条待审核`, color: 'text-emerald-600' },
       { label: '合作反馈', value: allReviews.length, sub: '可审核证据与反馈状态', color: 'text-amber-600' },
       { label: '尽调申请', value: dueDiligenceRequests.length, sub: `${pendingDueDiligence} 条待跟进`, color: 'text-purple-600' },
+      { label: '注册申请', value: registrationRequests.length, sub: `${pendingRegistrations} 条待审批`, color: 'text-sky-600' },
     ];
-  }, [allReviews.length, creatorProfiles, dueDiligenceRequests, editablePartners.length]);
+  }, [allReviews.length, creatorProfiles, dueDiligenceRequests, editablePartners.length, registrationRequests]);
 
   function savePartners(nextPartners: AdminPartner[]) {
     setEditablePartners(nextPartners);
@@ -618,6 +649,27 @@ export default function AdminPage() {
   function setDueDiligenceStatus(requestId: string, status: string) {
     saveDueDiligenceRequests(
       dueDiligenceRequests.map((request) =>
+        request.id === requestId
+          ? { ...request, status, reviewedAt: new Date().toISOString() }
+          : request
+      )
+    );
+  }
+
+  function saveRegistrationRequests(nextRequests: RegistrationRequest[]) {
+    setRegistrationRequests(nextRequests);
+    window.localStorage.setItem(REGISTRATION_REQUEST_STORAGE_KEY, JSON.stringify(nextRequests));
+    if (isSupabaseConfigured) {
+      upsertRegistrationRequests(nextRequests as Record<string, unknown>[]).catch(() => {
+        setNotice('本地已保存，但注册申请同步云端数据库失败，请稍后重试。');
+      });
+    }
+    setNotice(isSupabaseConfigured ? '已保存注册申请审批状态，并同步到云端数据库。' : '已保存注册申请审批状态。');
+  }
+
+  function setRegistrationRequestStatus(requestId: string, status: string) {
+    saveRegistrationRequests(
+      registrationRequests.map((request) =>
         request.id === requestId
           ? { ...request, status, reviewedAt: new Date().toISOString() }
           : request
@@ -817,6 +869,32 @@ export default function AdminPage() {
     }
   }
 
+  async function deleteRegistrationSubmission(request: RegistrationRequest) {
+    const name = request.name || request.email || '这条注册申请';
+    const confirmed = window.confirm(`确认删除「${name}」吗？删除后后台不再显示这条注册申请。`);
+    if (!confirmed) return;
+
+    const id = String(request.id);
+    setDeletingSubmissionId(id);
+    try {
+      if (isSupabaseConfigured && id) {
+        await deleteRegistrationRequest(id);
+      }
+
+      const nextDeletedIds = Array.from(new Set([...deletedRegistrationRequestIds, id]));
+      const nextRequests = registrationRequests.filter((item) => item.id !== id);
+      setDeletedRegistrationRequestIds(nextDeletedIds);
+      setRegistrationRequests(nextRequests);
+      window.localStorage.setItem(DELETED_REGISTRATION_REQUEST_STORAGE_KEY, JSON.stringify(nextDeletedIds));
+      window.localStorage.setItem(REGISTRATION_REQUEST_STORAGE_KEY, JSON.stringify(nextRequests));
+      setNotice('已删除注册申请。');
+    } catch {
+      setNotice('删除失败：云端数据库可能还没开启注册申请删除权限，请确认已补跑注册申请 SQL。');
+    } finally {
+      setDeletingSubmissionId(null);
+    }
+  }
+
   function updateCreator(index: number, patch: Partial<CreatorProfile>) {
     saveCreatorProfiles(
       creatorProfiles.map((profile, i) => {
@@ -936,6 +1014,7 @@ export default function AdminPage() {
             { key: 'creatorProfiles', label: `入驻申请 (${creatorProfiles.length})` },
             { key: 'reviews', label: `合作反馈 (${allReviews.length})` },
             { key: 'dueDiligence', label: `尽调申请 (${dueDiligenceRequests.length})` },
+            { key: 'registrationRequests', label: `注册申请 (${registrationRequests.length})` },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -1297,6 +1376,69 @@ export default function AdminPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'registrationRequests' && (
+          <div className="space-y-3">
+            {registrationRequests.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center text-sm text-gray-400">暂无注册申请。</div>
+            ) : (
+              registrationRequests.map((request) => {
+                const status = request.status ?? 'pending';
+                const statusMeta = {
+                  pending: { label: '待审批', color: 'bg-amber-50 text-amber-700 border-amber-100' },
+                  approved: { label: '已通过', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+                  contacted: { label: '已联系', color: 'bg-blue-50 text-blue-700 border-blue-100' },
+                  rejected: { label: '已拒绝', color: 'bg-gray-50 text-gray-500 border-gray-100' },
+                }[status] ?? { label: status, color: 'bg-gray-50 text-gray-500 border-gray-100' };
+
+                return (
+                  <div key={request.id} className="bg-white border border-gray-200 rounded-2xl p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base font-bold text-gray-900">{request.name || '未填写姓名'}</h3>
+                          <span className={`text-xs border px-2 py-0.5 rounded-md ${statusMeta.color}`}>{statusMeta.label}</span>
+                          {request.applicantType && <span className="text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-md">{request.applicantType}</span>}
+                          {request.intent && <span className="text-xs bg-gray-50 text-gray-600 border border-gray-100 px-2 py-0.5 rounded-md">{request.intent}</span>}
+                        </div>
+                        <div className="mt-3 grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
+                          <div><span className="text-gray-400">邮箱：</span>{request.email || '未填写'}</div>
+                          <div><span className="text-gray-400">手机/微信：</span>{request.contact || '未填写'}</div>
+                          <div><span className="text-gray-400">公司/机构/账号：</span>{request.organization || '未填写'}</div>
+                          <div><span className="text-gray-400">提交时间：</span>{request.submittedAt ? new Date(String(request.submittedAt)).toLocaleString() : '未知'}</div>
+                        </div>
+                        {request.note && (
+                          <div className="mt-3 rounded-xl bg-gray-50 border border-gray-100 px-3 py-2 text-sm text-gray-600 leading-relaxed">
+                            {request.note}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                        <button onClick={() => setRegistrationRequestStatus(request.id, 'approved')} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1.5 rounded-lg hover:bg-emerald-100">
+                          通过
+                        </button>
+                        <button onClick={() => setRegistrationRequestStatus(request.id, 'contacted')} className="text-xs bg-blue-50 text-blue-700 border border-blue-100 px-2.5 py-1.5 rounded-lg hover:bg-blue-100">
+                          已联系
+                        </button>
+                        <button onClick={() => setRegistrationRequestStatus(request.id, 'rejected')} className="text-xs bg-gray-50 text-gray-600 border border-gray-100 px-2.5 py-1.5 rounded-lg hover:bg-gray-100">
+                          拒绝
+                        </button>
+                        <button
+                          onClick={() => deleteRegistrationSubmission(request)}
+                          disabled={deletingSubmissionId === request.id}
+                          className="inline-flex items-center gap-1 text-xs bg-white text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingSubmissionId === request.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         )}
