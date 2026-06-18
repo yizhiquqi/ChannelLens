@@ -151,6 +151,7 @@ const REGISTRATION_REQUEST_STORAGE_KEY = 'channellens_registration_requests';
 const DELETED_CREATOR_STORAGE_KEY = 'channellens_deleted_creator_profiles';
 const DELETED_REVIEW_STORAGE_KEY = 'channellens_deleted_reviews';
 const DELETED_DUE_DILIGENCE_STORAGE_KEY = 'channellens_deleted_due_diligence_requests';
+const DELETED_DUE_DILIGENCE_FINGERPRINTS_STORAGE_KEY = 'channellens_deleted_due_diligence_fingerprints';
 const DELETED_REGISTRATION_REQUEST_STORAGE_KEY = 'channellens_deleted_registration_requests';
 
 const verificationOptions = ['未核验', '部分核验', '已核验'];
@@ -214,6 +215,39 @@ function mergeById<T extends Record<string, unknown>>(primary: T[], fallback: T[
   });
 
   return merged;
+}
+
+function stableHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function dueDiligenceFingerprint(request: DueDiligenceRequest) {
+  return [
+    request.submittedAt,
+    request.brand_name,
+    request.contact,
+    request.target_partner_name,
+    request.expected_report_type ?? request.reportType,
+  ].map((value) => String(value ?? '').trim()).join('|');
+}
+
+function normalizeDueDiligenceRequests(requests: DueDiligenceRequest[]) {
+  const seen = new Set<string>();
+  return requests.reduce<DueDiligenceRequest[]>((acc, request, index) => {
+    const fingerprint = dueDiligenceFingerprint(request);
+    const id = typeof request.id === 'string' && request.id.trim()
+      ? request.id
+      : `DD_LEGACY_${stableHash(fingerprint || `row-${index}`)}`;
+    const dedupeKey = fingerprint || id;
+    if (seen.has(dedupeKey)) return acc;
+    seen.add(dedupeKey);
+    acc.push({ ...request, id });
+    return acc;
+  }, []);
 }
 
 function TextInput({
@@ -471,6 +505,7 @@ export default function AdminPage() {
   const [deletedCreatorIds, setDeletedCreatorIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_CREATOR_STORAGE_KEY));
   const [deletedReviewIds, setDeletedReviewIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_REVIEW_STORAGE_KEY));
   const [deletedDueDiligenceIds, setDeletedDueDiligenceIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_DUE_DILIGENCE_STORAGE_KEY));
+  const [deletedDueDiligenceFingerprints, setDeletedDueDiligenceFingerprints] = useState<string[]>(() => parseStoredArray<string>(DELETED_DUE_DILIGENCE_FINGERPRINTS_STORAGE_KEY));
   const [deletedRegistrationRequestIds, setDeletedRegistrationRequestIds] = useState<string[]>(() => parseStoredArray<string>(DELETED_REGISTRATION_REQUEST_STORAGE_KEY));
 
   useEffect(() => {
@@ -530,7 +565,13 @@ export default function AdminPage() {
       if (!isSupabaseConfigured) {
         setCreatorProfiles(localProfiles.filter((profile) => !deletedCreatorIds.includes(String(profile.id))));
         setLocalReviews(localFeedback.filter((review) => !deletedReviewIds.includes(String(review.id))));
-        setDueDiligenceRequests(localDueDiligenceRequests.filter((request) => !deletedDueDiligenceIds.includes(String(request.id))));
+        const nextDueDiligence = normalizeDueDiligenceRequests(localDueDiligenceRequests)
+          .filter((request) => (
+            !deletedDueDiligenceIds.includes(String(request.id)) &&
+            !deletedDueDiligenceFingerprints.includes(dueDiligenceFingerprint(request))
+          ));
+        setDueDiligenceRequests(nextDueDiligence);
+        window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextDueDiligence));
         setRegistrationRequests(localRegistrationRequests.filter((request) => !deletedRegistrationRequestIds.includes(String(request.id))));
         return;
       }
@@ -550,10 +591,13 @@ export default function AdminPage() {
             .filter((profile) => !deletedCreatorIds.includes(String(profile.id)))
         );
         setLocalReviews(mergeById(remoteFeedback, localFeedback).filter((review) => !deletedReviewIds.includes(String(review.id))));
-        setDueDiligenceRequests(
-          mergeById(remoteDueDiligenceRequests, localDueDiligenceRequests)
-            .filter((request) => !deletedDueDiligenceIds.includes(String(request.id)))
-        );
+        const nextDueDiligence = normalizeDueDiligenceRequests(mergeById(remoteDueDiligenceRequests, localDueDiligenceRequests))
+          .filter((request) => (
+            !deletedDueDiligenceIds.includes(String(request.id)) &&
+            !deletedDueDiligenceFingerprints.includes(dueDiligenceFingerprint(request))
+          ));
+        setDueDiligenceRequests(nextDueDiligence);
+        window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextDueDiligence));
         setRegistrationRequests(
           mergeById(remoteRegistrationRequests, localRegistrationRequests)
             .filter((request) => !deletedRegistrationRequestIds.includes(String(request.id)))
@@ -563,7 +607,13 @@ export default function AdminPage() {
         setRegistrationRequests(localRegistrationRequests.filter((request) => !deletedRegistrationRequestIds.includes(String(request.id))));
         setCreatorProfiles(localProfiles.filter((profile) => !deletedCreatorIds.includes(String(profile.id))));
         setLocalReviews(localFeedback.filter((review) => !deletedReviewIds.includes(String(review.id))));
-        setDueDiligenceRequests(localDueDiligenceRequests.filter((request) => !deletedDueDiligenceIds.includes(String(request.id))));
+        const nextDueDiligence = normalizeDueDiligenceRequests(localDueDiligenceRequests)
+          .filter((request) => (
+            !deletedDueDiligenceIds.includes(String(request.id)) &&
+            !deletedDueDiligenceFingerprints.includes(dueDiligenceFingerprint(request))
+          ));
+        setDueDiligenceRequests(nextDueDiligence);
+        window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextDueDiligence));
         setNotice('云端数据读取失败，当前显示本机缓存数据。');
       } finally {
         if (!cancelled) setRemoteLoading(false);
@@ -574,7 +624,7 @@ export default function AdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [deletedCreatorIds, deletedDueDiligenceIds, deletedRegistrationRequestIds, deletedReviewIds]);
+  }, [deletedCreatorIds, deletedDueDiligenceFingerprints, deletedDueDiligenceIds, deletedRegistrationRequestIds, deletedReviewIds]);
 
   const allReviews: LocalReview[] = useMemo(
     () => mergeById(
@@ -636,10 +686,11 @@ export default function AdminPage() {
 
 
   function saveDueDiligenceRequests(nextRequests: DueDiligenceRequest[]) {
-    setDueDiligenceRequests(nextRequests);
-    window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextRequests));
+    const normalizedRequests = normalizeDueDiligenceRequests(nextRequests);
+    setDueDiligenceRequests(normalizedRequests);
+    window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(normalizedRequests));
     if (isSupabaseConfigured) {
-      upsertDueDiligenceRequests(nextRequests as Record<string, unknown>[]).catch(() => {
+      upsertDueDiligenceRequests(normalizedRequests as Record<string, unknown>[]).catch(() => {
         setNotice('????????????????????????');
       });
     }
@@ -844,28 +895,38 @@ export default function AdminPage() {
   }
 
   async function deleteDueDiligenceSubmission(request: DueDiligenceRequest) {
-    const name = request.target_partner_name || request.brand_name || '这条尽调申请';
-    const confirmed = window.confirm(`确认删除「${name}」吗？删除后后台不再显示这条尽调申请。`);
-    if (!confirmed) return;
+    {
+      const name = request.target_partner_name || request.brand_name || '这条尽调申请';
+      const confirmed = window.confirm(`确认删除「${name}」吗？删除后后台不再显示这条尽调申请。`);
+      if (!confirmed) return;
 
-    const id = String(request.id);
-    setDeletingSubmissionId(id);
-    try {
-      if (isSupabaseConfigured && id) {
-        await deleteDueDiligenceRequest(id);
+      const id = String(request.id);
+      const requestFingerprint = dueDiligenceFingerprint(request);
+      setDeletingSubmissionId(id);
+
+      let cloudDeleted = true;
+      try {
+        if (isSupabaseConfigured && id) {
+          await deleteDueDiligenceRequest(id);
+        }
+      } catch {
+        cloudDeleted = false;
       }
 
       const nextDeletedIds = Array.from(new Set([...deletedDueDiligenceIds, id]));
-      const nextRequests = dueDiligenceRequests.filter((item) => item.id !== id);
+      const nextDeletedFingerprints = Array.from(new Set([...deletedDueDiligenceFingerprints, requestFingerprint]));
+      const nextRequests = normalizeDueDiligenceRequests(dueDiligenceRequests).filter((item) => (
+        item.id !== id && dueDiligenceFingerprint(item) !== requestFingerprint
+      ));
       setDeletedDueDiligenceIds(nextDeletedIds);
+      setDeletedDueDiligenceFingerprints(nextDeletedFingerprints);
       setDueDiligenceRequests(nextRequests);
       window.localStorage.setItem(DELETED_DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextDeletedIds));
+      window.localStorage.setItem(DELETED_DUE_DILIGENCE_FINGERPRINTS_STORAGE_KEY, JSON.stringify(nextDeletedFingerprints));
       window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextRequests));
-      setNotice('已删除尽调申请。');
-    } catch {
-      setNotice('删除失败：云端数据库可能还没开启尽调申请删除权限，请先补跑删除权限 SQL。');
-    } finally {
+      setNotice(cloudDeleted ? '已删除尽调申请。' : '已从后台移除这条尽调申请；如果刷新后仍出现，请再检查 Supabase 删除权限。');
       setDeletingSubmissionId(null);
+      return;
     }
   }
 
