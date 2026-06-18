@@ -40,7 +40,10 @@ export function CSVDataProvider({ children }: { children: ReactNode }) {
           .then(([adminPartners, visibilityOverrides, publicReviews]) => {
             const visibilityMap = new Map(visibilityOverrides.map((item) => [item.id, item.visibility]));
             const publicAdminPartners = adminPartners.filter((partner) => partner.adminVisibility === 'public');
-            const visibleCsvPartners = partners.filter((partner) => visibilityMap.get(partner.id) !== 'internal');
+            const visibleCsvPartners = partners.filter((partner) => {
+              const visibility = visibilityMap.get(partner.id);
+              return visibility === undefined || visibility === 'public';
+            });
             const seen = new Set<string>();
             const sourcePartners = publicAdminPartners.length > 0 ? publicAdminPartners : visibleCsvPartners;
             const mergedPartners = sourcePartners.filter((partner) => {

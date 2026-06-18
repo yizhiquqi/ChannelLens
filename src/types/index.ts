@@ -72,7 +72,7 @@ export interface Partner {
   followerCount?: string;
   engagementRate?: string;
   updatedAt: string;
-  adminVisibility?: 'public' | 'internal';
+  adminVisibility?: 'public' | 'pending_public' | 'internal' | 'archived';
 }
 
 export interface CooperationCase {
@@ -114,7 +114,7 @@ export interface CooperationReview {
   riskFeedback: string;
   evidenceStatus: EvidenceStatus;
   reviewStatus: ReviewStatus;
-  reviewVisibility?: 'public' | 'internal';
+  reviewVisibility?: 'public' | 'pending_public' | 'internal' | 'archived';
   createdAt: string;
 }
 

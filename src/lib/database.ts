@@ -583,3 +583,54 @@ export async function deleteRegistrationRequest(requestId: string) {
   if (error) throw error;
   if (!data?.length) throw new Error('No registration request was deleted.');
 }
+
+export async function insertAuditLog(payload: JsonRecord) {
+  const id = withId(payload, 'AUDIT');
+  const nextPayload: JsonRecord = {
+    ...payload,
+    id,
+    createdAt: payload.createdAt ?? new Date().toISOString(),
+  };
+
+  if (!supabase) {
+    return { ...nextPayload, storage: 'local' };
+  }
+
+  const { error } = await supabase.from('admin_audit_logs').insert({
+    id,
+    action_type: String(nextPayload.actionType ?? ''),
+    target_type: String(nextPayload.targetType ?? ''),
+    target_id: String(nextPayload.targetId ?? ''),
+    target_name: String(nextPayload.targetName ?? ''),
+    result: String(nextPayload.result ?? ''),
+    note: String(nextPayload.note ?? ''),
+    payload: nextPayload,
+  });
+
+  if (error) throw error;
+  return { ...nextPayload, storage: 'supabase' };
+}
+
+export async function fetchAuditLogs<T extends JsonRecord>() {
+  if (!supabase) return [] as T[];
+
+  const { data, error } = await supabase
+    .from('admin_audit_logs')
+    .select('id,action_type,target_type,target_id,target_name,result,note,payload,created_at')
+    .order('created_at', { ascending: false })
+    .limit(300);
+
+  if (error) return [] as T[];
+
+  return (data ?? []).map((row) => ({
+    ...(row.payload as T),
+    id: row.id,
+    actionType: row.action_type,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    targetName: row.target_name,
+    result: row.result,
+    note: row.note,
+    createdAt: (row.payload as JsonRecord)?.createdAt ?? row.created_at,
+  })) as T[];
+}

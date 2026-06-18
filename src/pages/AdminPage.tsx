@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Papa from 'papaparse';
 import {
   AlertTriangle,
   CheckCircle,
@@ -6,6 +7,8 @@ import {
   Edit3,
   Eye,
   EyeOff,
+  FileUp,
+  History,
   Loader2,
   Plus,
   Save,
@@ -23,10 +26,12 @@ import {
   deleteDueDiligenceRequest,
   deleteRegistrationRequest,
   fetchAdminPartners,
+  fetchAuditLogs,
   fetchCooperationReviews,
   fetchCreatorProfiles,
   fetchDueDiligenceRequests,
   fetchRegistrationRequests,
+  insertAuditLog,
   isSupabaseConfigured,
   upsertAdminPartners,
   upsertCooperationReviews,
@@ -34,10 +39,10 @@ import {
   upsertDueDiligenceRequests,
   upsertRegistrationRequests,
 } from '../lib/database';
-import type { Partner, CooperationReview } from '../types';
+import type { Partner } from '../types';
 
-type AdminTab = 'overview' | 'partners' | 'creatorProfiles' | 'reviews' | 'dueDiligence' | 'registrationRequests';
-type Visibility = 'public' | 'internal';
+type AdminTab = 'overview' | 'partners' | 'creatorProfiles' | 'reviews' | 'dueDiligence' | 'registrationRequests' | 'import' | 'auditLogs';
+type Visibility = 'internal' | 'pending_public' | 'public' | 'archived';
 type AdminPartner = Partner & {
   adminVisibility?: Visibility;
   adminNotes?: string;
@@ -143,6 +148,34 @@ type RegistrationRequest = Record<string, unknown> & {
   reviewedAt?: string;
 };
 
+type AuditLog = Record<string, unknown> & {
+  id: string;
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  targetName: string;
+  result: string;
+  note?: string;
+  createdAt: string;
+};
+
+type AuditInput = {
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  targetName: string;
+  result: string;
+  note?: string;
+};
+
+type ImportMode = 'upsert' | 'skip' | 'replace';
+
+type PartnerImportPreview = {
+  partner: AdminPartner;
+  action: 'create' | 'update' | 'skip';
+  reason: string;
+};
+
 const PARTNER_STORAGE_KEY = 'channellens_admin_partners';
 const CREATOR_STORAGE_KEY = 'channellens_creator_profiles';
 const REVIEW_STORAGE_KEY = 'channellens_reviews';
@@ -153,9 +186,16 @@ const DELETED_REVIEW_STORAGE_KEY = 'channellens_deleted_reviews';
 const DELETED_DUE_DILIGENCE_STORAGE_KEY = 'channellens_deleted_due_diligence_requests';
 const DELETED_DUE_DILIGENCE_FINGERPRINTS_STORAGE_KEY = 'channellens_deleted_due_diligence_fingerprints';
 const DELETED_REGISTRATION_REQUEST_STORAGE_KEY = 'channellens_deleted_registration_requests';
+const AUDIT_LOG_STORAGE_KEY = 'channellens_admin_audit_logs';
 
 const verificationOptions = ['未核验', '部分核验', '已核验'];
-const visibilityOptions: Visibility[] = ['public', 'internal'];
+const visibilityOptions: Visibility[] = ['internal', 'pending_public', 'public', 'archived'];
+const visibilityLabels: Record<Visibility, string> = {
+  internal: '内部',
+  pending_public: '待公开',
+  public: '公开',
+  archived: '下架',
+};
 const statusOptions = ['pending', 'verified', 'needs_info', 'rejected', 'disputed'];
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -337,6 +377,126 @@ function splitTags(value: string) {
     .filter(Boolean);
 }
 
+function asVisibility(value: unknown): Visibility {
+  const text = String(value ?? '').trim();
+  if (text === 'public' || text === '公开') return 'public';
+  if (text === 'pending_public' || text === '待公开') return 'pending_public';
+  if (text === 'archived' || text === '下架') return 'archived';
+  return 'internal';
+}
+
+function visibilityBadgeClass(visibility: Visibility) {
+  if (visibility === 'public') return 'text-emerald-600 bg-emerald-50 border-emerald-100';
+  if (visibility === 'pending_public') return 'text-blue-700 bg-blue-50 border-blue-100';
+  if (visibility === 'archived') return 'text-gray-500 bg-gray-50 border-gray-200';
+  return 'text-gray-500 bg-gray-50 border-gray-100';
+}
+
+function rowValue(row: Record<string, unknown>, keys: string[]) {
+  const normalized = new Map(Object.entries(row).map(([key, value]) => [key.trim().toLowerCase(), value]));
+
+  for (const key of keys) {
+    const value = row[key] ?? normalized.get(key.trim().toLowerCase());
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return '';
+}
+
+function importPartnerFromRow(row: Record<string, unknown>, index: number): AdminPartner {
+  const legalEntity = rowValue(row, ['legalEntity', 'company', 'companyName', '公司主体', '公司名称', '主体名称']);
+  const displayName = rowValue(row, ['displayName', 'name', '品牌名', '简称', '展示名称']) || legalEntity || `Imported partner ${index + 1}`;
+  const creditCode = rowValue(row, ['unifiedSocialCreditCode', 'creditCode', '统一社会信用代码']);
+  const idSeed = creditCode || legalEntity || displayName || `IMPORT_${index + 1}`;
+  const id = rowValue(row, ['id', 'partner_id', 'ID']) || `COMPANY_${idSeed.replace(/[^\w]+/g, '_').toUpperCase()}`;
+  const partnerType = splitTags(rowValue(row, ['partnerType', '类型', '机构类型']) || 'MCN/机构');
+  const riskTags = splitTags(rowValue(row, ['riskTags', '风险标签']));
+  const scoreText = rowValue(row, ['overall', 'score', '综合评分', '合作适配指数']);
+  const overall = Number(scoreText) || 90;
+  const now = new Date().toISOString().slice(0, 10);
+
+  return {
+    id,
+    name: displayName,
+    entityType: 'company',
+    displayName,
+    legalEntity,
+    companyType: rowValue(row, ['companyType', '企业类型']),
+    registeredCapital: rowValue(row, ['registeredCapital', '注册资本']),
+    foundedDate: rowValue(row, ['foundedDate', '成立日期']),
+    approvalDate: rowValue(row, ['approvalDate', '核准日期']),
+    address: rowValue(row, ['address', '住址', '地址']),
+    businessScope: rowValue(row, ['businessScope', '经营范围']),
+    businessStatus: rowValue(row, ['businessStatus', '经营状态']) || '在营',
+    businessInfoSource: rowValue(row, ['businessInfoSource', '工商信息来源']) || '企信通',
+    roleTitle: rowValue(row, ['roleTitle', '角色']) || 'MCN/机构',
+    city: rowValue(row, ['city', '所在地', '城市']),
+    coverageArea: splitTags(rowValue(row, ['coverageArea', '覆盖区域']) || '全国'),
+    partnerType,
+    platforms: splitTags(rowValue(row, ['platforms', '平台'])),
+    categories: splitTags(rowValue(row, ['categories', '类目', '所属行业'])),
+    priceRange: rowValue(row, ['priceRange', '价格带']),
+    cooperationModels: splitTags(rowValue(row, ['cooperationModels', '合作模式']) || '直播带货'),
+    typicalFeeRange: rowValue(row, ['typicalFeeRange', '收费']),
+    customerProfile: rowValue(row, ['customerProfile', '粉丝画像']),
+    salesScenario: rowValue(row, ['salesScenario', '销售场景']),
+    verificationStatus: '已核验' as Partner['verificationStatus'],
+    riskLevel: (rowValue(row, ['riskLevel', '风险等级']) || 'low') as Partner['riskLevel'],
+    riskTags,
+    scores: {
+      authenticity: Number(rowValue(row, ['authenticity'])) || overall,
+      fulfillment: Number(rowValue(row, ['fulfillment'])) || overall,
+      categoryFit: Number(rowValue(row, ['categoryFit'])) || overall,
+      conversionFeedback: Number(rowValue(row, ['conversionFeedback'])) || overall,
+      riskControl: Number(rowValue(row, ['riskControl'])) || overall,
+      dataCompleteness: Number(rowValue(row, ['dataCompleteness'])) || overall,
+      overall,
+    },
+    publicCases: rowValue(row, ['publicCases', '公开案例']),
+    caseVerificationStatus: rowValue(row, ['caseVerificationStatus', '案例核验状态']) || '已核验',
+    publicCaseSource: rowValue(row, ['publicCaseSource', '案例来源']),
+    publicCaseVerificationNote: rowValue(row, ['publicCaseVerificationNote', '案例核验备注']),
+    dataSource: rowValue(row, ['dataSource', '数据来源']) || '企信通',
+    description: rowValue(row, ['description', '简介']),
+    followerCount: rowValue(row, ['followerCount', '达人数量']),
+    engagementRate: rowValue(row, ['engagementRate']),
+    updatedAt: rowValue(row, ['updatedAt', '档案更新时间']) || now,
+    adminVisibility: asVisibility(rowValue(row, ['adminVisibility', 'visibility', '可见性'])),
+    adminNotes: rowValue(row, ['adminNotes', '后台备注']),
+  };
+}
+
+function partnerMatchKey(partner: AdminPartner) {
+  const partnerRecord = partner as Record<string, unknown>;
+  return String(
+    partnerRecord.unifiedSocialCreditCode ||
+    partnerRecord.businessLicenseCode ||
+    partner.legalEntity ||
+    partner.displayName ||
+    partner.id
+  ).trim().toLowerCase();
+}
+
+function buildPartnerImportPreview(rows: Array<Record<string, unknown>>, partners: AdminPartner[], mode: ImportMode): PartnerImportPreview[] {
+  const existingById = new Map(partners.map((partner) => [partner.id, partner]));
+  const existingByKey = new Map<string, AdminPartner>(
+    partners
+      .map((partner): [string, AdminPartner] => [partnerMatchKey(partner), partner])
+      .filter(([key]) => Boolean(key))
+  );
+
+  return rows.map((row, index) => {
+    const partner = importPartnerFromRow(row, index);
+    const matched = existingById.get(partner.id) || existingByKey.get(partnerMatchKey(partner));
+    if (matched && mode === 'skip') {
+      return { partner: { ...partner, id: matched.id }, action: 'skip', reason: '已存在，按当前模式跳过' };
+    }
+    if (matched) {
+      return { partner: { ...matched, ...partner, id: matched.id }, action: 'update', reason: '匹配到现有档案，将覆盖更新' };
+    }
+    return { partner, action: 'create', reason: '新合作方档案' };
+  });
+}
+
 
 function serializeRelationships(partner: AdminPartner) {
   return (partner.adminRelationships ?? [])
@@ -496,6 +656,10 @@ export default function AdminPage() {
   const [localReviews, setLocalReviews] = useState<LocalReview[]>([]);
   const [dueDiligenceRequests, setDueDiligenceRequests] = useState<DueDiligenceRequest[]>([]);
   const [registrationRequests, setRegistrationRequests] = useState<RegistrationRequest[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => parseStoredArray<AuditLog>(AUDIT_LOG_STORAGE_KEY));
+  const [importMode, setImportMode] = useState<ImportMode>('upsert');
+  const [importPreview, setImportPreview] = useState<PartnerImportPreview[]>([]);
+  const [importFileName, setImportFileName] = useState('');
   const [editingPartner, setEditingPartner] = useState<AdminPartner | null>(null);
   const [editingCreatorIndex, setEditingCreatorIndex] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
@@ -626,6 +790,27 @@ export default function AdminPage() {
     };
   }, [deletedCreatorIds, deletedDueDiligenceFingerprints, deletedDueDiligenceIds, deletedRegistrationRequestIds, deletedReviewIds]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAuditLogs() {
+      if (!isSupabaseConfigured) return;
+      const remoteLogs = await fetchAuditLogs<AuditLog>();
+      if (cancelled) return;
+      const localLogs = parseStoredArray<AuditLog>(AUDIT_LOG_STORAGE_KEY);
+      const mergedLogs = mergeById(remoteLogs, localLogs)
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+        .slice(0, 300);
+      setAuditLogs(mergedLogs);
+      window.localStorage.setItem(AUDIT_LOG_STORAGE_KEY, JSON.stringify(mergedLogs));
+    }
+
+    loadAuditLogs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const allReviews: LocalReview[] = useMemo(
     () => mergeById(
       localReviews,
@@ -650,6 +835,75 @@ export default function AdminPage() {
       { label: '注册申请', value: registrationRequests.length, sub: `${pendingRegistrations} 条待审批`, color: 'text-sky-600' },
     ];
   }, [allReviews.length, creatorProfiles, dueDiligenceRequests, editablePartners.length, registrationRequests]);
+
+  function recordAudit(entry: AuditInput) {
+    const nextEntry: AuditLog = {
+      ...entry,
+      id: `AUDIT_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString(),
+    };
+    const nextLogs = [nextEntry, ...auditLogs].slice(0, 300);
+    setAuditLogs(nextLogs);
+    window.localStorage.setItem(AUDIT_LOG_STORAGE_KEY, JSON.stringify(nextLogs));
+    if (isSupabaseConfigured) {
+      insertAuditLog(nextEntry as unknown as Record<string, unknown>).catch(() => {
+        setNotice('审核日志已保存在本地，云端日志同步失败，请确认已补跑审核日志 SQL。');
+      });
+    }
+  }
+
+  function handlePartnerImportFile(file: File | null) {
+    if (!file) return;
+    setImportFileName(file.name);
+
+    Papa.parse<Record<string, unknown>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (result) => {
+        const rows = result.data.filter((row) => Object.values(row).some((value) => String(value ?? '').trim()));
+        const preview = buildPartnerImportPreview(rows, editablePartners, importMode);
+        setImportPreview(preview);
+        setNotice(`已解析 ${preview.length} 条合作方数据，请确认后导入。`);
+      },
+      error: () => {
+        setNotice('文件解析失败，请确认是 UTF-8 CSV，或先用 Excel 另存为 CSV 后再上传。');
+      },
+    });
+  }
+
+  function refreshImportPreview(nextMode: ImportMode) {
+    setImportMode(nextMode);
+    setImportPreview((current) => buildPartnerImportPreview(current.map((item) => item.partner as unknown as Record<string, unknown>), editablePartners, nextMode));
+  }
+
+  function applyPartnerImport() {
+    const changedRows = importPreview.filter((item) => item.action !== 'skip');
+    if (changedRows.length === 0) {
+      setNotice('没有需要导入的合作方数据。');
+      return;
+    }
+
+    const nextMap = new Map(editablePartners.map((partner) => [partner.id, partner]));
+    changedRows.forEach((item) => {
+      if (importMode === 'replace') {
+        nextMap.set(item.partner.id, item.partner);
+        return;
+      }
+      nextMap.set(item.partner.id, { ...nextMap.get(item.partner.id), ...item.partner });
+    });
+
+    const nextPartners = Array.from(nextMap.values());
+    savePartners(nextPartners);
+    recordAudit({
+      actionType: 'partner_import',
+      targetType: 'admin_partners',
+      targetId: importFileName,
+      targetName: importFileName || 'CSV import',
+      result: `${changedRows.length} rows imported`,
+      note: `mode=${importMode}; create=${importPreview.filter((item) => item.action === 'create').length}; update=${importPreview.filter((item) => item.action === 'update').length}; skip=${importPreview.filter((item) => item.action === 'skip').length}`,
+    });
+    setImportPreview([]);
+  }
 
   function savePartners(nextPartners: AdminPartner[]) {
     setEditablePartners(nextPartners);
@@ -698,6 +952,7 @@ export default function AdminPage() {
   }
 
   function setDueDiligenceStatus(requestId: string, status: string) {
+    const request = dueDiligenceRequests.find((item) => item.id === requestId);
     saveDueDiligenceRequests(
       dueDiligenceRequests.map((request) =>
         request.id === requestId
@@ -705,6 +960,14 @@ export default function AdminPage() {
           : request
       )
     );
+    recordAudit({
+      actionType: 'due_diligence_status',
+      targetType: 'due_diligence_requests',
+      targetId: requestId,
+      targetName: request?.target_partner_name || request?.brand_name || requestId,
+      result: status,
+      note: '后台更新尽调申请状态',
+    });
   }
 
   function saveRegistrationRequests(nextRequests: RegistrationRequest[]) {
@@ -719,6 +982,7 @@ export default function AdminPage() {
   }
 
   function setRegistrationRequestStatus(requestId: string, status: string) {
+    const request = registrationRequests.find((item) => item.id === requestId);
     saveRegistrationRequests(
       registrationRequests.map((request) =>
         request.id === requestId
@@ -726,6 +990,14 @@ export default function AdminPage() {
           : request
       )
     );
+    recordAudit({
+      actionType: 'registration_status',
+      targetType: 'registration_requests',
+      targetId: requestId,
+      targetName: request?.name || request?.email || requestId,
+      result: status,
+      note: '后台更新注册申请状态',
+    });
   }
 
   function setReviewEvidenceStatus(reviewId: string, evidenceStatus: string, reviewStatus: string, defaultNote: string) {
@@ -762,6 +1034,14 @@ export default function AdminPage() {
         )
       )
     );
+    recordAudit({
+      actionType: 'review_status',
+      targetType: 'cooperation_feedback',
+      targetId: reviewId,
+      targetName: currentReview.brandName || reviewId,
+      result: `${reviewStatus}/${evidenceStatus}`,
+      note,
+    });
   }
 
   function setReviewVisibility(reviewId: string, reviewVisibility: Visibility) {
@@ -774,6 +1054,30 @@ export default function AdminPage() {
         localReviews.map((review) => (review.id === reviewId ? { ...review, reviewVisibility } : review))
       )
     );
+    recordAudit({
+      actionType: 'review_visibility',
+      targetType: 'cooperation_feedback',
+      targetId: reviewId,
+      targetName: currentReview.brandName || reviewId,
+      result: reviewVisibility,
+      note: `合作反馈可见性改为${visibilityLabels[reviewVisibility]}`,
+    });
+  }
+
+  function setPartnerVisibility(partner: AdminPartner, visibility: Visibility) {
+    savePartners(
+      editablePartners.map((item) =>
+        item.id === partner.id ? { ...item, adminVisibility: visibility } : item
+      )
+    );
+    recordAudit({
+      actionType: 'partner_visibility',
+      targetType: 'admin_partners',
+      targetId: partner.id,
+      targetName: partner.displayName,
+      result: visibility,
+      note: `合作方可见性改为${visibilityLabels[visibility]}`,
+    });
   }
 
   async function openEvidenceFile(review: LocalReview, index: number) {
@@ -812,6 +1116,14 @@ export default function AdminPage() {
   function saveEditingPartner() {
     if (!editingPartner) return;
     savePartners(editablePartners.map((partner) => (partner.id === editingPartner.id ? editingPartner : partner)));
+    recordAudit({
+      actionType: 'partner_edit',
+      targetType: 'admin_partners',
+      targetId: editingPartner.id,
+      targetName: editingPartner.displayName,
+      result: 'saved',
+      note: '后台编辑合作方档案',
+    });
     setEditingPartner(null);
   }
 
@@ -830,6 +1142,14 @@ export default function AdminPage() {
       setEditablePartners(nextPartners);
       window.localStorage.setItem(PARTNER_STORAGE_KEY, JSON.stringify(nextPartners));
       if (editingPartner?.id === partner.id) setEditingPartner(null);
+      recordAudit({
+        actionType: 'partner_delete',
+        targetType: 'admin_partners',
+        targetId: partner.id,
+        targetName: partner.displayName,
+        result: 'deleted',
+        note: '后台删除合作方档案',
+      });
       setNotice(isSupabaseConfigured ? '已删除合作方档案，并同步到云端数据库。' : '已从本地后台档案删除。');
     } catch {
       setNotice('删除失败：云端数据库可能还没开启管理员删除权限，请先补跑删除权限 SQL。');
@@ -860,6 +1180,14 @@ export default function AdminPage() {
       window.localStorage.setItem(DELETED_CREATOR_STORAGE_KEY, JSON.stringify(nextDeletedIds));
       window.localStorage.setItem(CREATOR_STORAGE_KEY, JSON.stringify(nextProfiles));
       if (editingCreatorIndex === index) setEditingCreatorIndex(null);
+      recordAudit({
+        actionType: 'creator_submission_delete',
+        targetType: 'partner_profiles',
+        targetId: id,
+        targetName: String(name),
+        result: 'deleted',
+        note: '后台删除入驻申请',
+      });
       setNotice('已删除入驻申请。');
     } catch {
       setNotice('删除失败：云端数据库可能还没开启入驻申请删除权限，请先补跑删除权限 SQL。');
@@ -886,6 +1214,14 @@ export default function AdminPage() {
       setLocalReviews(nextReviews);
       window.localStorage.setItem(DELETED_REVIEW_STORAGE_KEY, JSON.stringify(nextDeletedIds));
       window.localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(nextReviews));
+      recordAudit({
+        actionType: 'review_delete',
+        targetType: 'cooperation_feedback',
+        targetId: id,
+        targetName: String(name),
+        result: 'deleted',
+        note: '后台删除合作反馈',
+      });
       setNotice('已删除合作反馈。');
     } catch {
       setNotice('删除失败：云端数据库可能还没开启合作反馈删除权限，请先补跑删除权限 SQL。');
@@ -924,6 +1260,14 @@ export default function AdminPage() {
       window.localStorage.setItem(DELETED_DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextDeletedIds));
       window.localStorage.setItem(DELETED_DUE_DILIGENCE_FINGERPRINTS_STORAGE_KEY, JSON.stringify(nextDeletedFingerprints));
       window.localStorage.setItem(DUE_DILIGENCE_STORAGE_KEY, JSON.stringify(nextRequests));
+      recordAudit({
+        actionType: 'due_diligence_delete',
+        targetType: 'due_diligence_requests',
+        targetId: id,
+        targetName: String(name),
+        result: 'deleted',
+        note: '后台删除尽调申请',
+      });
       setNotice(cloudDeleted ? '已删除尽调申请。' : '已从后台移除这条尽调申请；如果刷新后仍出现，请再检查 Supabase 删除权限。');
       setDeletingSubmissionId(null);
       return;
@@ -948,6 +1292,14 @@ export default function AdminPage() {
       setRegistrationRequests(nextRequests);
       window.localStorage.setItem(DELETED_REGISTRATION_REQUEST_STORAGE_KEY, JSON.stringify(nextDeletedIds));
       window.localStorage.setItem(REGISTRATION_REQUEST_STORAGE_KEY, JSON.stringify(nextRequests));
+      recordAudit({
+        actionType: 'registration_delete',
+        targetType: 'registration_requests',
+        targetId: id,
+        targetName: String(name),
+        result: 'deleted',
+        note: '后台删除注册申请',
+      });
       setNotice('已删除注册申请。');
     } catch {
       setNotice('删除失败：云端数据库可能还没开启注册申请删除权限，请确认已补跑注册申请 SQL。');
@@ -969,11 +1321,20 @@ export default function AdminPage() {
   function setCreatorReview(index: number, status: string, defaultReason: string) {
     const reason = window.prompt('填写审核备注/原因，用户侧后续可展示这段内容：', defaultReason);
     if (reason === null) return;
+    const profile = creatorProfiles[index];
 
     updateCreator(index, {
       status,
       reviewReason: reason,
       reviewedAt: new Date().toISOString(),
+    });
+    recordAudit({
+      actionType: 'creator_review',
+      targetType: 'partner_profiles',
+      targetId: String(profile?.id ?? index),
+      targetName: String(profile?.creatorName || profile?.mcnName || profile?.brandName || profile?.companyName || index),
+      result: status,
+      note: reason,
     });
     setNotice(`已更新审核状态：${statusLabels[status]?.label ?? status}`);
   }
@@ -986,6 +1347,14 @@ export default function AdminPage() {
     if (editablePartners.some((item) => item.id === partner.id)) {
       setNotice('这条入驻申请已经生成过合作方档案。');
       updateCreator(index, { status: 'verified' });
+      recordAudit({
+        actionType: 'creator_approve_existing',
+        targetType: 'partner_profiles',
+        targetId: String(profile.id ?? index),
+        targetName: partner.displayName,
+        result: 'verified',
+        note: '入驻申请已通过，合作方档案已存在',
+      });
       return;
     }
 
@@ -1004,6 +1373,14 @@ export default function AdminPage() {
           : item
       )
     );
+    recordAudit({
+      actionType: 'creator_approve',
+      targetType: 'partner_profiles',
+      targetId: String(profile.id ?? index),
+      targetName: partner.displayName,
+      result: 'verified',
+      note: `已生成合作方档案：${partner.id}`,
+    });
     setNotice(`已审核通过，并生成合作方档案：${partner.displayName}`);
   }
 
@@ -1076,6 +1453,8 @@ export default function AdminPage() {
             { key: 'reviews', label: `合作反馈 (${allReviews.length})` },
             { key: 'dueDiligence', label: `尽调申请 (${dueDiligenceRequests.length})` },
             { key: 'registrationRequests', label: `注册申请 (${registrationRequests.length})` },
+            { key: 'import', label: '批量导入' },
+            { key: 'auditLogs', label: `审核日志 (${auditLogs.length})` },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -1164,7 +1543,7 @@ export default function AdminPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {editablePartners.map((partner) => {
-                    const visible = partner.adminVisibility === 'public';
+                    const visibility = asVisibility(partner.adminVisibility);
                     const typeText = Array.isArray(partner.partnerType) ? partner.partnerType.join('、') : partner.partnerType;
                     return (
                       <tr key={partner.id} className="hover:bg-gray-50">
@@ -1209,19 +1588,13 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           <button
-                            onClick={() =>
-                              savePartners(
-                                editablePartners.map((item) =>
-                                  item.id === partner.id ? { ...item, adminVisibility: visible ? 'internal' : 'public' } : item
-                                )
-                              )
-                            }
+                            onClick={() => setPartnerVisibility(partner, visibility === 'public' ? 'internal' : 'public')}
                             className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border ${
-                              visible ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-gray-500 bg-gray-50 border-gray-100'
+                              visibilityBadgeClass(visibility)
                             }`}
                           >
-                            {visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                            {visible ? '公开' : '内部'}
+                            {visibility === 'public' ? <Eye size={12} /> : <EyeOff size={12} />}
+                            {visibilityLabels[visibility]}
                           </button>
                         </td>
                         <td className="px-4 py-3">
@@ -1576,7 +1949,7 @@ export default function AdminPage() {
                 const reviewStatus = String(review.reviewStatus ?? 'pending');
                 const statusMeta = statusLabels[reviewStatus] ?? statusLabels.pending;
                 const evidenceStatus = String(review.evidenceStatus ?? 'pending_review');
-                const reviewVisibility = String(review.reviewVisibility ?? 'internal') as Visibility;
+                const reviewVisibility = asVisibility(review.reviewVisibility);
                 const evidenceLabel =
                   evidenceStatus === 'verified'
                     ? '证据已验证'
@@ -1598,10 +1971,8 @@ export default function AdminPage() {
                           evidenceStatus === 'needs_info' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                           'bg-amber-50 text-amber-700 border-amber-100'
                         }`}>{evidenceLabel}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded border ${
-                          reviewVisibility === 'public' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-gray-50 text-gray-500 border-gray-100'
-                        }`}>
-                          {reviewVisibility === 'public' ? '公开' : '内部'}
+                        <span className={`text-[10px] px-2 py-0.5 rounded border ${visibilityBadgeClass(reviewVisibility)}`}>
+                          {visibilityLabels[reviewVisibility]}
                         </span>
                         {reviewStatus === 'verified' ? <CheckCircle size={13} className="text-emerald-500" /> : <Clock size={13} className="text-amber-500" />}
                       </div>
@@ -1705,6 +2076,149 @@ export default function AdminPage() {
           </div>
         )}
 
+        {activeTab === 'import' && (
+          <div className="grid lg:grid-cols-[360px,1fr] gap-6">
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 h-fit">
+              <div className="flex items-center gap-2 mb-4">
+                <FileUp size={18} className="text-blue-600" />
+                <h2 className="text-sm font-bold text-gray-900">合作方批量导入</h2>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed mb-4">
+                先支持 CSV。Excel 可以另存为 CSV 后上传；系统会按 ID、统一社会信用代码、公司主体或展示名匹配现有档案。
+              </p>
+              <label className="block">
+                <span className="block text-xs font-semibold text-gray-500 mb-1.5">导入模式</span>
+                <select
+                  value={importMode}
+                  onChange={(event) => refreshImportPreview(event.target.value as ImportMode)}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="upsert">新增并更新已有档案</option>
+                  <option value="skip">只新增，已有档案跳过</option>
+                  <option value="replace">覆盖匹配档案</option>
+                </select>
+              </label>
+              <label className="mt-4 flex flex-col items-center justify-center gap-2 border border-dashed border-blue-200 bg-blue-50/60 rounded-xl px-4 py-8 cursor-pointer hover:bg-blue-50">
+                <FileUp size={24} className="text-blue-600" />
+                <span className="text-sm font-semibold text-blue-700">上传 CSV 文件</span>
+                <span className="text-xs text-blue-500">{importFileName || '支持 UTF-8 CSV'}</span>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(event) => handlePartnerImportFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={applyPartnerImport}
+                disabled={importPreview.filter((item) => item.action !== 'skip').length === 0}
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors text-sm disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                <Save size={16} />
+                确认导入 {importPreview.filter((item) => item.action !== 'skip').length} 条
+              </button>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900">导入预览</h2>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    新增 {importPreview.filter((item) => item.action === 'create').length}，更新 {importPreview.filter((item) => item.action === 'update').length}，跳过 {importPreview.filter((item) => item.action === 'skip').length}
+                  </p>
+                </div>
+              </div>
+              {importPreview.length === 0 ? (
+                <div className="p-10 text-center text-sm text-gray-400">上传 CSV 后会在这里预览导入结果。</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        {['动作', '名称', '公司主体', '企业类型', '注册资本', '可见性', '说明'].map((head) => (
+                          <th key={head} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{head}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {importPreview.slice(0, 100).map((item) => {
+                        const visibility = asVisibility(item.partner.adminVisibility);
+                        return (
+                          <tr key={`${item.partner.id}-${item.action}`} className={item.action === 'skip' ? 'bg-gray-50 opacity-70' : ''}>
+                            <td className="px-4 py-3">
+                              <span className={`text-[10px] px-2 py-0.5 rounded border ${
+                                item.action === 'create'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : item.action === 'update'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                    : 'bg-gray-50 text-gray-500 border-gray-100'
+                              }`}>
+                                {item.action === 'create' ? '新增' : item.action === 'update' ? '更新' : '跳过'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-medium text-gray-900">{item.partner.displayName}</td>
+                            <td className="px-4 py-3 text-gray-600">{item.partner.legalEntity || '-'}</td>
+                            <td className="px-4 py-3 text-gray-600">{item.partner.companyType || '-'}</td>
+                            <td className="px-4 py-3 text-gray-600">{item.partner.registeredCapital || '-'}</td>
+                            <td className="px-4 py-3">
+                              <span className={`text-[10px] px-2 py-0.5 rounded border ${visibilityBadgeClass(visibility)}`}>
+                                {visibilityLabels[visibility]}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-400">{item.reason}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'auditLogs' && (
+          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+              <History size={18} className="text-blue-600" />
+              <div>
+                <h2 className="text-sm font-bold text-gray-900">审核日志</h2>
+                <p className="text-xs text-gray-400 mt-0.5">记录后台审核、公开、删除、导入等关键操作。</p>
+              </div>
+            </div>
+            {auditLogs.length === 0 ? (
+              <div className="p-10 text-center text-sm text-gray-400">暂无审核日志。后续操作会自动记录。</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      {['时间', '动作', '对象', '结果', '备注'].map((head) => (
+                        <th key={head} className="text-left text-xs font-semibold text-gray-500 px-4 py-3">{head}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.createdAt ? new Date(log.createdAt).toLocaleString() : '-'}</td>
+                        <td className="px-4 py-3 text-xs font-mono text-blue-700">{log.actionType}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-xs font-medium text-gray-900">{log.targetName || '-'}</div>
+                          <div className="text-[10px] text-gray-400">{log.targetType} / {log.targetId}</div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-700">{log.result}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500 max-w-md">{log.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-8 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex items-start gap-3">
           <ShieldAlert size={16} className="text-amber-500 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700 leading-relaxed">
@@ -1788,7 +2302,7 @@ export default function AdminPage() {
                   label="可见性"
                   value={editingPartner.adminVisibility ?? 'internal'}
                   options={visibilityOptions}
-                  labels={{ public: '公开', internal: '内部' }}
+                  labels={visibilityLabels}
                   onChange={(value) => setEditingPartner({ ...editingPartner, adminVisibility: value as Visibility })}
                 />
               </div>
