@@ -7,14 +7,14 @@ begin
      and exists (select 1 from public.admin_partners where id = 'p_douyin_001') then
     raise exception 'Cannot rename P001: p_douyin_001 already exists.';
   end if;
-  if exists (select 1 from public.admin_partners where id = 'p002')
+  if exists (select 1 from public.admin_partners where id = 'P002')
      and exists (select 1 from public.admin_partners where id = 'p_douyin_002') then
-    raise exception 'Cannot rename p002: p_douyin_002 already exists.';
+    raise exception 'Cannot rename P002: p_douyin_002 already exists.';
   end if;
 end $$;
 
 with id_map(old_id, new_id) as (
-  values ('P001', 'p_douyin_001'), ('p002', 'p_douyin_002')
+  values ('P001', 'p_douyin_001'), ('P002', 'p_douyin_002')
 )
 insert into public.admin_partners (id, visibility, payload, created_at, updated_at)
 select
@@ -28,7 +28,7 @@ join public.admin_partners source on source.id = id_map.old_id
 on conflict (id) do nothing;
 
 with id_map(old_id, new_id) as (
-  values ('P001', 'p_douyin_001'), ('p002', 'p_douyin_002')
+  values ('P001', 'p_douyin_001'), ('P002', 'p_douyin_002')
 )
 insert into public.partner_visibility (id, visibility, updated_at)
 select id_map.new_id, coalesce(source.visibility, partner.visibility, 'public'), now()
@@ -43,29 +43,29 @@ on conflict (id) do update set
 update public.admin_partners
 set payload = replace(
   replace(payload::text, '"P001"', '"p_douyin_001"'),
-  '"p002"', '"p_douyin_002"'
+  '"P002"', '"p_douyin_002"'
 )::jsonb,
 updated_at = now()
-where payload::text like '%"P001"%' or payload::text like '%"p002"%';
+where payload::text like '%"P001"%' or payload::text like '%"P002"%';
 
 update public.cooperation_feedback
 set payload = replace(
   replace(payload::text, '"P001"', '"p_douyin_001"'),
-  '"p002"', '"p_douyin_002"'
+  '"P002"', '"p_douyin_002"'
 )::jsonb,
 updated_at = now()
-where payload::text like '%"P001"%' or payload::text like '%"p002"%';
+where payload::text like '%"P001"%' or payload::text like '%"P002"%';
 
 update public.due_diligence_requests
 set payload = replace(
   replace(payload::text, '"P001"', '"p_douyin_001"'),
-  '"p002"', '"p_douyin_002"'
+  '"P002"', '"p_douyin_002"'
 )::jsonb,
 updated_at = now()
-where payload::text like '%"P001"%' or payload::text like '%"p002"%';
+where payload::text like '%"P001"%' or payload::text like '%"P002"%';
 
-delete from public.partner_visibility where id in ('P001', 'p002');
-delete from public.admin_partners where id in ('P001', 'p002');
+delete from public.partner_visibility where id in ('P001', 'P002');
+delete from public.admin_partners where id in ('P001', 'P002');
 
 insert into public.admin_partners (id, visibility, payload, updated_at)
 values
