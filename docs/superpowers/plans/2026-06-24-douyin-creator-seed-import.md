@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 30 位抖音达人以公开、未核验档案写入 ChannelLens 正式 Supabase，并验证网站列表、搜索和详情页。
+**Goal:** 将现有两位个人达人统一编号，并将 30 位抖音达人以公开、未核验档案写入 ChannelLens 正式 Supabase，随后验证网站列表、搜索和详情页。
 
-**Architecture:** 复用现有 `admin_partners` 与 `partner_visibility` 两张表。使用一个可审计、可重复执行的 SQL 文件，通过固定 ID `p_douyin_001` 至 `p_douyin_030` upsert 数据；页面仅增加公开主页链接和“风险待评估”口径，随后由 Vercel 部署。
+**Architecture:** 复用现有合作方数据表。SQL 事务先将 `P001`、`p002` 迁移为 `p_douyin_001`、`p_douyin_002`，同步更新可见性、评价和关系引用，再通过固定 ID `p_douyin_003` 至 `p_douyin_032` upsert 30 条新数据；页面仅增加公开主页链接和“风险待评估”口径，随后由 Vercel 部署。
 
 **Tech Stack:** PostgreSQL / Supabase、React 18、Vite、TypeScript、Vercel
 
@@ -18,25 +18,27 @@
 - Modify: `src/pages/ChannelListPage.tsx` — 未核验档案显示“风险待评估”。
 - Modify: `src/pages/ChannelDetailPage.tsx` — 展示公开主页链接和中性风险状态。
 
-### Task 1: 创建可重复执行的达人导入 SQL
+### Task 1: 创建可重复执行的编号迁移和达人导入 SQL
 
 **Files:**
 - Create: `supabase_douyin_creator_seed_import.sql`
 
 - [ ] **Step 1: 写入事务和固定 ID 数据**
 
-SQL 使用以下结构，并为 30 位达人分别写入完整 JSONB payload：
+SQL 先迁移两个旧 ID，再为 30 位新达人分别写入完整 JSONB payload：
 
 ```sql
 begin;
 
+-- 迁移前先复制主记录，再更新所有引用，最后删除旧记录；完整文件需兼容旧 ID 大小写。
+
 insert into public.admin_partners (id, visibility, payload, updated_at)
 values
   (
-    'p_douyin_001',
+    'p_douyin_003',
     'public',
     jsonb_build_object(
-      'id', 'p_douyin_001',
+      'id', 'p_douyin_003',
       'name', '护肤学霸蚊子（测评版）',
       'displayName', '护肤学霸蚊子（测评版）',
       'entityType', 'person',
@@ -80,7 +82,7 @@ on conflict (id) do update set
 insert into public.partner_visibility (id, visibility, updated_at)
 select id, 'public', now()
 from public.admin_partners
-where id between 'p_douyin_001' and 'p_douyin_030'
+where id between 'p_douyin_003' and 'p_douyin_032'
 on conflict (id) do update set
   visibility = excluded.visibility,
   updated_at = excluded.updated_at;
@@ -91,36 +93,36 @@ commit;
 30 个 ID 与昵称严格对应：
 
 ```text
-p_douyin_001 护肤学霸蚊子（测评版）
-p_douyin_002 护肤硕士季学长
-p_douyin_003 美妆护肤测评
-p_douyin_004 米多多护肤
-p_douyin_005 kk和王博士（测评版）
-p_douyin_006 老爸评测美妆护肤
-p_douyin_007 成分测评漆仔
-p_douyin_008 朵儿朵护肤
-p_douyin_009 护肤测评
-p_douyin_010 成分测评源哥
-p_douyin_011 子轩成分测评
-p_douyin_012 洋叔de测评
-p_douyin_013 瑞思白白（测评版）
-p_douyin_014 小法的护肤笔记
-p_douyin_015 大杰护肤品研发师
-p_douyin_016 小Ray零食控
-p_douyin_017 阿灿零食测评
-p_douyin_018 阿荣零食测评
-p_douyin_019 荣哥零食测评
-p_douyin_020 芝士小奶盖（测评版）
-p_douyin_021 甜甜的轻食零食
-p_douyin_022 小绵羊零食测评
-p_douyin_023 胖兔零食测评
-p_douyin_024 零食测评
-p_douyin_025 小锦鲤零食测评
-p_douyin_026 可乐很真实！（零食测评）
-p_douyin_027 洺洺的轻食零食
-p_douyin_028 汐汐 零食小铺
-p_douyin_029 小橙子轻食零食
-p_douyin_030 麻薯测评局
+p_douyin_003 护肤学霸蚊子（测评版）
+p_douyin_004 护肤硕士季学长
+p_douyin_005 美妆护肤测评
+p_douyin_006 米多多护肤
+p_douyin_007 kk和王博士（测评版）
+p_douyin_008 老爸评测美妆护肤
+p_douyin_009 成分测评漆仔
+p_douyin_010 朵儿朵护肤
+p_douyin_011 护肤测评
+p_douyin_012 成分测评源哥
+p_douyin_013 子轩成分测评
+p_douyin_014 洋叔de测评
+p_douyin_015 瑞思白白（测评版）
+p_douyin_016 小法的护肤笔记
+p_douyin_017 大杰护肤品研发师
+p_douyin_018 小Ray零食控
+p_douyin_019 阿灿零食测评
+p_douyin_020 阿荣零食测评
+p_douyin_021 荣哥零食测评
+p_douyin_022 芝士小奶盖（测评版）
+p_douyin_023 甜甜的轻食零食
+p_douyin_024 小绵羊零食测评
+p_douyin_025 胖兔零食测评
+p_douyin_026 零食测评
+p_douyin_027 小锦鲤零食测评
+p_douyin_028 可乐很真实！（零食测评）
+p_douyin_029 洺洺的轻食零食
+p_douyin_030 汐汐 零食小铺
+p_douyin_031 小橙子轻食零食
+p_douyin_032 麻薯测评局
 ```
 
 - [ ] **Step 2: 静态检查 SQL 的数量和 ID 唯一性**
@@ -138,9 +140,9 @@ $ids | Select-Object -Last 1
 Expected:
 
 ```text
-30
+32
 'p_douyin_001'
-'p_douyin_030'
+'p_douyin_032'
 ```
 
 - [ ] **Step 3: 检查禁止字段和基本口径**
@@ -263,7 +265,7 @@ git commit -m "fix: clarify unverified creator profiles"
 ```sql
 select id, visibility, payload ->> 'displayName' as display_name
 from public.admin_partners
-where id between 'p_douyin_001' and 'p_douyin_030'
+where id between 'p_douyin_001' and 'p_douyin_032'
 order by id;
 ```
 
@@ -284,7 +286,7 @@ select
   count(*) filter (where payload ->> 'verificationStatus' = '未核验') as unverified_count,
   count(*) filter (where (payload #>> '{scores,overall}')::numeric = 0) as zero_score_count
 from public.admin_partners
-where id between 'p_douyin_001' and 'p_douyin_030';
+where id between 'p_douyin_003' and 'p_douyin_032';
 ```
 
 Expected:
@@ -298,7 +300,7 @@ total=30, public_count=30, unverified_count=30, zero_score_count=30
 ```sql
 select id, payload ->> 'displayName', payload ->> 'followerCount', payload ->> 'dataSource'
 from public.admin_partners
-where id in ('p_douyin_003', 'p_douyin_017', 'p_douyin_030')
+where id in ('p_douyin_005', 'p_douyin_019', 'p_douyin_032')
 order by id;
 ```
 
@@ -327,7 +329,7 @@ Expected: 每次均能返回对应达人。
 
 - [ ] **Step 3: 抽查三个详情页**
 
-打开 `p_douyin_003`、`p_douyin_017`、`p_douyin_030`。
+打开 `p_douyin_005`、`p_douyin_019`、`p_douyin_032`。
 
 Expected:
 
