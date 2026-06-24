@@ -514,7 +514,13 @@ function VerifiedReviewsModule({ reviews, partnerId, onNavigate }: { reviews: Co
 
 // ─── Module G: Risk ────────────────────────────────────────────────────────────
 function RiskModule({ partner }: { partner: Partner }) {
-  const cfg = RISK_LEVEL_CONFIG[partner.riskLevel] ?? RISK_LEVEL_CONFIG.low;
+  const hasRiskAssessment = partner.verificationStatus !== '未核验' || partner.riskTags.length > 0;
+  const cfg = hasRiskAssessment
+    ? (RISK_LEVEL_CONFIG[partner.riskLevel] ?? RISK_LEVEL_CONFIG.low)
+    : { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-500', label: '风险待评估', icon: 'text-gray-400' };
+  const advice = hasRiskAssessment
+    ? RISK_ADVICE[partner.riskLevel]
+    : '该档案尚未完成风险核验，当前不对风险等级作判断。建议合作前核验案例、数据和合同条款。';
   return (
     <div className={`border rounded-2xl p-6 ${cfg.bg} ${cfg.border}`}>
       <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-4 flex items-center gap-2">
@@ -524,7 +530,7 @@ function RiskModule({ partner }: { partner: Partner }) {
         <AlertTriangle size={16} className={cfg.icon} />
         <span className={`text-sm font-bold ${cfg.text}`}>{cfg.label}</span>
       </div>
-      <p className="text-sm text-gray-700 mb-4">{RISK_ADVICE[partner.riskLevel]}</p>
+      <p className="text-sm text-gray-700 mb-4">{advice}</p>
       {partner.riskTags.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {partner.riskTags.map((tag) => (
