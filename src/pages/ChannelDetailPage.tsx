@@ -267,6 +267,21 @@ function IdentityModule({ partner }: { partner: Partner }) {
             <dd className="font-medium text-gray-700">{businessInfoSource}</dd>
           </div>
         )}
+        {partner.publicProfileUrl && (
+          <div>
+            <dt className="text-xs text-gray-400 mb-0.5">公开主页</dt>
+            <dd>
+              <a
+                href={partner.publicProfileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-700"
+              >
+                查看抖音主页 <ExternalLink size={12} />
+              </a>
+            </dd>
+          </div>
+        )}
         <div>
           <dt className="text-xs text-gray-400 mb-0.5">档案更新时间</dt>
           <dd className="text-gray-500">{partner.updatedAt || '—'}</dd>
@@ -607,6 +622,10 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
     ? partner.adminRelationships
     : relationships.filter((r) => r.partnerId === channelId);
   const riskCfg = RISK_LEVEL_CONFIG[partner.riskLevel] ?? RISK_LEVEL_CONFIG.low;
+  const hasRiskAssessment = partner.verificationStatus !== '未核验' || partner.riskTags.length > 0;
+  const publicRiskCfg = hasRiskAssessment
+    ? riskCfg
+    : { bg: 'bg-gray-100', border: 'border-gray-200', text: 'text-gray-500', label: '风险待评估', icon: 'text-gray-400' };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -635,8 +654,8 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
                 <span className={`text-xs font-medium px-2 py-1 rounded border ${VERIFICATION_STYLES[partner.verificationStatus] ?? VERIFICATION_STYLES['未核验']}`}>
                   {partner.verificationStatus}
                 </span>
-                <span className={`text-xs font-medium px-2 py-1 rounded ${riskCfg.bg} ${riskCfg.text}`}>
-                  {riskCfg.label}
+                <span className={`text-xs font-medium px-2 py-1 rounded ${publicRiskCfg.bg} ${publicRiskCfg.text}`}>
+                  {publicRiskCfg.label}
                 </span>
               </div>
               <p className="text-sm text-gray-500">
@@ -720,8 +739,8 @@ export default function PartnerDetailPage({ channelId, onNavigate }: Props) {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">风险等级</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${riskCfg.bg} ${riskCfg.text}`}>
-                    {riskCfg.label}
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${publicRiskCfg.bg} ${publicRiskCfg.text}`}>
+                    {publicRiskCfg.label}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">

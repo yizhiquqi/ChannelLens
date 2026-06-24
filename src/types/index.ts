@@ -68,6 +68,7 @@ export interface Partner {
   publicCaseVerificationNote?: string;
   adminRelationships?: PartnerRelationship[];
   dataSource?: string;
+  publicProfileUrl?: string;
   description?: string;
   followerCount?: string;
   engagementRate?: string;

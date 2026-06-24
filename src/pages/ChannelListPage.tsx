@@ -68,6 +68,7 @@ function PartnerCard({ partner, verifiedReviewCount, onNavigate }: {
   onNavigate: (page: string, id?: string) => void;
 }) {
   const dataSource = getPublicDataSourceLabel(partner.dataSource);
+  const hasRiskAssessment = partner.verificationStatus !== '未核验' || partner.riskTags.length > 0;
 
   return (
     <div
@@ -142,10 +143,17 @@ function PartnerCard({ partner, verifiedReviewCount, onNavigate }: {
       {/* Footer */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-50">
         <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${RISK_STYLES[partner.riskLevel] ?? RISK_STYLES.low}`}>
-            <Shield size={10} />
-            {RISK_LABELS[partner.riskLevel] ?? '低风险'}
-          </span>
+          {hasRiskAssessment ? (
+            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${RISK_STYLES[partner.riskLevel] ?? RISK_STYLES.low}`}>
+              <Shield size={10} />
+              {RISK_LABELS[partner.riskLevel] ?? '低风险'}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">
+              <Shield size={10} />
+              风险待评估
+            </span>
+          )}
           {verifiedReviewCount > 0 ? (
             <span className="flex items-center gap-0.5 text-emerald-600">
               <CheckCircle size={10} />
